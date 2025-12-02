@@ -1,7 +1,9 @@
 import importlib
+from vllm.logger import init_logger
 import nt_ops
-import logging
-logger = logging.getLogger(__name__)
+
+logger = init_logger(__name__)
+
 # A list of tuples defining the patches to apply.
 # Each tuple contains:
 # (module_path, object_name, attribute_to_patch, patch_function)
@@ -15,12 +17,19 @@ _PATCHES = [
      nt_ops.rms.rms_forward),
 ]
 
+_patches_applied = False
+
 
 def apply_monkey_patches():
     """
     Applies all monkey patches defined in the _PATCHES list.
-    This function is executed when the module is imported.
+    This function is designed to be executed only once.
     """
+    global _patches_applied
+    if _patches_applied:
+        logger.warning("\033[33mWarning: Monkey patches have already been applied. Skipping.\033[0m")
+        return
+
     for module_path, obj_name, attr_name, patch_func in _PATCHES:
         try:
             # Dynamically import the module
@@ -28,15 +37,24 @@ def apply_monkey_patches():
 
             # Get the target object to patch
             target_obj = getattr(module, obj_name) if obj_name else module
+            target_name = f"{module_path}.{obj_name}" if obj_name else module_path
+
+            # Check if the specific attribute is already patched
+            if getattr(target_obj, attr_name) is patch_func:
+                logger.warning(
+                    f"\033[33mWarning: {target_name}.{attr_name} is already patched. Skipping.\033[0m"
+                )
+                continue
 
             # Apply the patch
             setattr(target_obj, attr_name, patch_func)
 
-            target_name = f"{module_path}.{obj_name}" if obj_name else module_path
-            logger.warning(f"\033[31mSuccessfully patched {target_name}.{attr_name}.\033[0m")
+            logger.info(f"\033[31mSuccessfully patched {target_name}.{attr_name}.\033[0m")
 
         except (ImportError, AttributeError) as e:
-            logger.warning(f"\033[31mFailed to apply patch for {module_path}: {e}\033[0m")
+            logger.error(f"\033[31mFailed to apply patch for {module_path}.{obj_name}.{attr_name}: {e}\033[0m")
+
+    _patches_applied = True
 
 
 # Apply all patches when this module is imported.

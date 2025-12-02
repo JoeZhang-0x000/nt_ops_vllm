@@ -6,7 +6,8 @@ import typing
 from vllm.utils.torch_utils import direct_register_custom_op
 from vllm.model_executor.custom_op import CustomOp
 import torch.nn.functional as F
-
+from vllm.logger import init_logger
+logger = init_logger(__name__)
 
 class SiluAndMul:
     def arrangement(x, y, out):
@@ -61,4 +62,5 @@ direct_register_custom_op("nt_silu_and_mul", siluAndMul, fake_impl=fake_siluAndM
 
 
 def silu_and_mul_forward(self, x: torch.Tensor) -> torch.Tensor:
+    logger.info_once("\033[32mNT SILU AND MUL is enabled.\033[0m")
     return torch.ops.vllm.nt_silu_and_mul(x)

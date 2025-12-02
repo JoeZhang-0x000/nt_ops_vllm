@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
-import nt_ops
 from vllm import LLM, SamplingParams
+import nt_ops
 
 # Sample prompts.
 prompts = [

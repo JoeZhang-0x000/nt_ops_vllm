@@ -3,7 +3,8 @@ import ninetoothed.language as ntl
 import torch
 from vllm.utils.torch_utils import direct_register_custom_op
 from typing import Tuple
-
+from vllm.logger import init_logger
+logger = init_logger(__name__)
 class RMSWithWeight:
 
     def arrangement(
@@ -321,6 +322,7 @@ def rms_forward(
     x: torch.Tensor,
     residual: torch.Tensor | None = None,
 ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+    logger.info_once("\033[32mNT RMS is enabled.\033[0m")
     if self.variance_size_override is not None:
         return self.forward_native(x, residual)
     return rms(

@@ -9,7 +9,8 @@ from nt_ops.config import (
     NT_STATIC_MODE,
 )
 from vllm.utils.torch_utils import direct_register_custom_op
-
+from vllm.logger import init_logger
+logger = init_logger(__name__)
 
 if NT_STATIC_MODE:
     BLOCK_SIZE_M = 32
@@ -152,4 +153,5 @@ def nt_unquantized_gemm(
 
 
 def dispatch_unquantized_gemm() -> Callable[..., torch.Tensor]:
+    logger.info_once("\033[32mNT GEMM is enabled.\033[0m")
     return nt_unquantized_gemm
