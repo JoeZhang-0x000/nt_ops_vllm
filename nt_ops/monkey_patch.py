@@ -15,6 +15,8 @@ _PATCHES = [
      nt_ops.activation.silu_and_mul_forward),
     ('vllm.model_executor.layers.layernorm', 'RMSNorm', 'forward',
      nt_ops.rms.rms_forward),
+     ("vllm.attention.ops.triton_unified_attention", None, "unified_attention",
+     nt_ops.attention.unified_attention_2d),
 ]
 
 _patches_applied = False
