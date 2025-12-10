@@ -378,10 +378,6 @@ def unified_attention_2d(
     if is_prefill:
         k, v, cu_seqlens_k = get_kv_from_cache(k, v, seqused_k, block_table)
 
-        # print(
-        #     f"q.shape: {q.shape}, k.shape: {k.shape}, cu_seqlens_q: {cu_seqlens_q.detach().cpu().numpy()}, cu_seqlens_k: {cu_seqlens_k.detach().cpu().numpy()}"
-        # )
-
         o = flash_attn_varlen_func(
             q, k, v, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, softmax_scale, causal
         )
@@ -389,30 +385,4 @@ def unified_attention_2d(
         o = flash_attn_with_kvcache(
             q, k, v, seqused_k, block_table, softmax_scale, causal
         )
-        # from .debug_attn import trion_attn
-
-        # trion_attn(
-        #     q,
-        #     k,
-        #     v,
-        #     out,
-        #     cu_seqlens_q,
-        #     max_seqlen_q,
-        #     seqused_k,
-        #     max_seqlen_k,
-        #     softmax_scale,
-        #     causal,
-        #     window_size,
-        #     block_table,
-        #     softcap,
-        #     q_descale,
-        #     k_descale,
-        #     v_descale,
-        #     alibi_slopes,
-        #     output_scale,
-        #     qq_bias,
-        #     sinks,
-        # )
-        # return
-
     out.copy_(o)
