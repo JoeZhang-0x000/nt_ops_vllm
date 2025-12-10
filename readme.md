@@ -1,7 +1,10 @@
 # NT Ops for vLLM
 
 ## TODO
-[x] [Correctness](nt_ops/doc/correctness.md)
+
+* [x] [Correctness](doc/correctness.md)
+* [ ] [Flexibility](doc/cross_platform.md)
+* [ ] [Performance](doc/performance.md)
 
 ## Project Introduction
 
