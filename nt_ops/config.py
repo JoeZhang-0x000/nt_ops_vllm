@@ -18,7 +18,7 @@ def _parse_int_env_var(env_var: str, default: int = 1) -> int:
 NT_DEBUG = _parse_bool_env_var("NT_DEBUG", "false")
 NT_OP = _parse_bool_env_var("NT_OP", "true")
 NT_MAX_NUM_CONFIG = _parse_int_env_var("NT_MAX_NUM_CONFIG", 2)
-NT_STATIC_MODE = _parse_bool_env_var("NT_STATIC_MODE", "true")
+NT_STATIC_MODE = _parse_bool_env_var("NT_STATIC_MODE", "false")
 
 
 class LogColors:
