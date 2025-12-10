@@ -3,7 +3,9 @@ import ninetoothed.language as ntl
 import torch
 from nt_ops.config import NT_MAX_NUM_CONFIG, NT_STATIC_MODE
 from nt_ops.kv_cache import get_kv_from_cache
+from vllm.logger import init_logger
 
+logger = init_logger(__name__)
 
 class _VarLen:
     if NT_STATIC_MODE:
@@ -158,6 +160,7 @@ def flash_attn_varlen_func(
     causal=True,
     **kwargs,
 ):
+    logger.info_once("\033[32mNT FA Varlen is enabled.\033[0m")  
     q_jag = torch.nested.nested_tensor_from_jagged(
         q.clone(), cu_seqlens_q, jagged_dim=1
     )
@@ -248,60 +251,58 @@ class KvCache:
         # k/v cache: num_blocks | block_size, head_size
 
         q_i = ntl.cast(q, dtype=ntl.float32) * sm_scale
-        # m_i = ntl.full((1,), float("-inf"), dtype=ntl.float32)
-        # l_i = ntl.full((1,), float(0), dtype=ntl.float32)
-        # o_i = ntl.zeros(q.shape, dtype=ntl.float32)
+        m_i = ntl.full((1,), float("-inf"), dtype=ntl.float32)
+        l_i = ntl.full((1,), float(0), dtype=ntl.float32)
+        o_i = ntl.zeros(q.shape, dtype=ntl.float32)
 
-        # # ntl.device_print("k_j_shape_0 %d", k_cache[0].shape[0])
-        # # ntl.device_print("k_j_shape_1 %d", k_cache[0].shape[1])
-        # block_nums = block_table.shape[0]
-        # block_size = k_cache[0].shape[0]
-        # seq_start = 0
-        # for blk in range(block_nums):
-        #     blk_id = block_table[blk]
-        #     k_j = ntl.cast(k_cache[blk_id], dtype=ntl.float32)
-        #     v_j = ntl.cast(v_cache[blk_id], dtype=ntl.float32)
+        block_nums = block_table.shape[0]
+        block_size = k_cache[0].shape[0]
+        seq_start = 0
+        for blk in range(block_nums):
+            blk_id = block_table[blk]
+            k_j = ntl.cast(k_cache[blk_id], dtype=ntl.float32)
+            v_j = ntl.cast(v_cache[blk_id], dtype=ntl.float32)
 
-        #     k_j_t = ntl.trans(k_j)
-        #     s_ij = ntl.dot(q_i, k_j_t)
+            k_j_t = ntl.trans(k_j)
+            s_ij = ntl.dot(q_i, k_j_t)
 
-        #     mask = (k_cache[blk].offsets(1) % block_size + seq_start) < cache_seqlens[0]
-        #     s_ij = ntl.where(mask[None, :], s_ij, float("-inf"))
+            mask = (k_cache[blk].offsets(1) % block_size + seq_start) < cache_seqlens[0]
+            s_ij = ntl.where(mask[None, :], s_ij, float("-inf"))
 
-        #     if is_causal:
-        #         pass
+            if is_causal:
+                pass
 
-        #     m_ij = ntl.max(s_ij, axis=1)
-        #     m_i_new = ntl.maximum(m_ij, m_i)
-        #     p_ij = ntl.exp(s_ij - m_i_new[:, None])
-        #     l_ij = ntl.sum(p_ij, axis=1)
+            m_ij = ntl.max(s_ij, axis=1)
+            m_i_new = ntl.maximum(m_ij, m_i)
+            p_ij = ntl.exp(s_ij - m_i_new[:, None])
+            l_ij = ntl.sum(p_ij, axis=1)
 
-        #     exp_diff = ntl.exp(m_i - m_i_new)
-        #     l_i_new = l_i * exp_diff + l_ij
+            exp_diff = ntl.exp(m_i - m_i_new)
+            l_i_new = l_i * exp_diff + l_ij
 
-        #     o_i = (
-        #         o_i * (l_i / l_i_new * exp_diff)[:, None]
-        #         + ntl.dot(p_ij, v_j) / l_i_new[:, None]
-        #     )
-        #     m_i = m_i_new
-        #     l_i = l_i_new
-        #     seq_start = seq_start + block_size
-        # o = ntl.cast(o_i, o.dtype)
+            o_i = (
+                o_i * (l_i / l_i_new * exp_diff)[:, None]
+                + ntl.dot(p_ij, v_j) / l_i_new[:, None]
+            )
+            m_i = m_i_new
+            l_i = l_i_new
+            seq_start = seq_start + block_size
+        o = ntl.cast(o_i, o.dtype)
 
     def _premake():
         tensors = (
             # q
-            ninetoothed.Tensor(5, shape_options={"upper_bound": 128}),
+            ninetoothed.Tensor(5, shape_options={"constexpr": True}),
             # k cache
             ninetoothed.Tensor(5, shape_options={"constexpr": True}),
             # v cache
             ninetoothed.Tensor(5, shape_options={"constexpr": True}),
             # o
-            ninetoothed.Tensor(5, shape_options={"upper_bound": 128}),
+            ninetoothed.Tensor(5, shape_options={"constexpr": True}),
             # cache_seqlens
-            ninetoothed.Tensor(5, shape_options={"upper_bound": 128}),
+            ninetoothed.Tensor(5, shape_options={"constexpr": True}),
             # block_table
-            ninetoothed.Tensor(5, shape_options={"upper_bound": 128}),
+            ninetoothed.Tensor(5, shape_options={"constexpr": True}),
             # softmax_scale
             ninetoothed.Tensor(0),
             # is_causal
@@ -327,7 +328,7 @@ def apply_cache(
         ),  # t h d -> b 1 h d -> b 1 num_head_kv num_head_per_group head_size
         k_cache.unsqueeze(3),  # num_blocks, block_szie, num_head_kv, 1, head_size
         v_cache.unsqueeze(3),
-        o,
+        o.view(o.shape[0], 1, k_cache.shape[-2], -1, o.shape[-1]),
         cache_seqlens.view(cache_seqlens.shape + (1, 1, 1, 1)),  # b 1 1 1 1
         block_table.view(block_table.shape + (1, 1, 1)),  # b j 1 1 1
         sm_scale,
@@ -339,6 +340,7 @@ def apply_cache(
 def flash_attn_with_kvcache(
     q, k_cache, v_cache, cache_seqlens, block_table, softmax_scale, causal
 ):
+    logger.info_once("\033[32mNT FA with KVCache is enabled.\033[0m")  
     return apply_cache(
         q, k_cache, v_cache, cache_seqlens, block_table, softmax_scale, causal
     )
@@ -376,9 +378,9 @@ def unified_attention_2d(
     if is_prefill:
         k, v, cu_seqlens_k = get_kv_from_cache(k, v, seqused_k, block_table)
 
-        print(
-            f"q.shape: {q.shape}, k.shape: {k.shape}, cu_seqlens_q: {cu_seqlens_q.detach().cpu().numpy()}, cu_seqlens_k: {cu_seqlens_k.detach().cpu().numpy()}"
-        )
+        # print(
+        #     f"q.shape: {q.shape}, k.shape: {k.shape}, cu_seqlens_q: {cu_seqlens_q.detach().cpu().numpy()}, cu_seqlens_k: {cu_seqlens_k.detach().cpu().numpy()}"
+        # )
 
         o = flash_attn_varlen_func(
             q, k, v, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, softmax_scale, causal
