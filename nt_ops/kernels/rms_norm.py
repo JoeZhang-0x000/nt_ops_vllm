@@ -138,7 +138,7 @@ def _premake_grouped_rows(input_dtype=None, norm_size=None):
         return arranged_input, arranged_weight, eps, arranged_output
 
     def _application(input, weight, eps, output):
-        _sum_sq = ntl.zeros((ROWS_PER_PROGRAM,), dtype=ntl.float32)
+        _sum_sq = ntl.zeros((input.shape[0],), dtype=ntl.float32)
         for i in range(input.shape[0]):
             for j in range(input.shape[1]):
                 val = ntl.cast(input[i, j], ntl.float32)
