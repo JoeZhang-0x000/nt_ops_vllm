@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import torch
 
-import ntops.torch
 from vllm.logger import init_logger
 
 from nt_ops.capabilities import record_hit
+from nt_ops.kernels.rms_norm import rms_norm as _rms_norm_kernel
 
 logger = init_logger(__name__)
 
@@ -23,7 +23,7 @@ def rms_norm_helper(
 ) -> torch.Tensor:
     logger.info_once("\033[32mNT RMS is enabled.\033[0m")
     record_hit("rms_norm")
-    return ntops.torch.rms_norm(
+    return _rms_norm_kernel(
         x,
         _normalized_shape(weight, x),
         weight=weight,
@@ -40,8 +40,8 @@ def fused_add_rms_norm_helper(
     logger.info_once("\033[32mNT RMS is enabled.\033[0m")
     record_hit("fused_add_rms_norm")
 
-    residual_out = ntops.torch.add(x, residual)
-    output = ntops.torch.rms_norm(
+    residual_out = x + residual
+    output = _rms_norm_kernel(
         residual_out,
         _normalized_shape(weight, residual_out),
         weight=weight,
@@ -66,7 +66,7 @@ def build_rms_forward_oot(original):
     """
 
     def forward_oot(self, x: torch.Tensor, residual: torch.Tensor | None = None):
-        # Edge cases not supported by ntops kernels — delegate to whatever
+        # Edge cases not supported by our kernels — delegate to whatever
         # was there before (MLU kernel or PyTorch-native fallback).
         if getattr(self, "variance_size_override", None) is not None:
             return original(self, x, residual)

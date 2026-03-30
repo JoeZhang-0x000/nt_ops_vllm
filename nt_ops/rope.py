@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import torch
 
-import ntops.torch
 from vllm.logger import init_logger
 
 from nt_ops.capabilities import record_hit
+from nt_ops.kernels.rope import rotary_position_embedding as _rope_kernel
 
 logger = init_logger(__name__)
 
@@ -22,7 +22,7 @@ def _apply_rotary(
 ) -> torch.Tensor:
     x_view = x.view(num_tokens, -1, head_size)
     x_rot = x_view[..., :rotary_dim].unsqueeze(0)
-    rotated = ntops.torch.rotary_position_embedding(
+    rotated = _rope_kernel(
         x_rot,
         sin,
         cos,
