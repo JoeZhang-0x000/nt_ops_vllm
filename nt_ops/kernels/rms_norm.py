@@ -95,14 +95,14 @@ def _premake_generic(ndim, num_normalized_dims, input_dtype=None, weight_dtype=N
 # ---------------------------------------------------------------------------
 # ROWWISE variant — one program per row, tiles over hidden dim
 # ---------------------------------------------------------------------------
-def _arrangement_rowwise(input, weight, eps, output, block_size, normalized_numel):
-    arranged_input = input.tile((1, block_size))
-    arranged_output = output.tile((1, block_size))
+def _arrangement_rowwise(input, weight, eps, output, normalized_numel):
+    arranged_input = input.tile((1, BLOCK_SIZE))
+    arranged_output = output.tile((1, BLOCK_SIZE))
     arranged_weight = weight[None, None, :]
     return arranged_input, arranged_weight, eps, arranged_output, normalized_numel
 
 
-def _application_rowwise(input, weight, eps, output, block_size, normalized_numel):
+def _application_rowwise(input, weight, eps, output, normalized_numel):
     _sum_sq = ntl.zeros((1,), dtype=ntl.float32)
     for i in range(input.shape[0]):
         for j in range(input.shape[1]):
@@ -121,7 +121,6 @@ def _premake_rowwise(input_dtype=None, normalized_numel=None):
         Tensor(0, dtype=ninetoothed.float64),
         Tensor(2, dtype=input_dtype),
         Tensor(0, dtype=ninetoothed.int64),
-        Tensor(0, dtype=ninetoothed.int64),
     )
     return _arrangement_rowwise, _application_rowwise, tensors
 
@@ -129,14 +128,14 @@ def _premake_rowwise(input_dtype=None, normalized_numel=None):
 # ---------------------------------------------------------------------------
 # GROUPED_ROWS variant — ROWS_PER_PROGRAM rows per program, reduces grid size
 # ---------------------------------------------------------------------------
-def _arrangement_grouped_rows(input, weight, eps, output, block_size, normalized_numel):
-    arranged_input = input.tile((ROWS_PER_PROGRAM, block_size))
-    arranged_output = output.tile((ROWS_PER_PROGRAM, block_size))
+def _arrangement_grouped_rows(input, weight, eps, output, normalized_numel):
+    arranged_input = input.tile((ROWS_PER_PROGRAM, BLOCK_SIZE))
+    arranged_output = output.tile((ROWS_PER_PROGRAM, BLOCK_SIZE))
     arranged_weight = weight[None, None, :]
     return arranged_input, arranged_weight, eps, arranged_output, normalized_numel
 
 
-def _application_grouped_rows(input, weight, eps, output, block_size, normalized_numel):
+def _application_grouped_rows(input, weight, eps, output, normalized_numel):
     _sum_sq = ntl.zeros((ROWS_PER_PROGRAM,), dtype=ntl.float32)
     for i in range(input.shape[0]):
         for j in range(input.shape[1]):
@@ -154,7 +153,6 @@ def _premake_grouped_rows(input_dtype=None, normalized_numel=None):
         Tensor(1, dtype=input_dtype),
         Tensor(0, dtype=ninetoothed.float64),
         Tensor(2, dtype=input_dtype),
-        Tensor(0, dtype=ninetoothed.int64),
         Tensor(0, dtype=ninetoothed.int64),
     )
     return _arrangement_grouped_rows, _application_grouped_rows, tensors
@@ -217,11 +215,11 @@ def rms_norm(input: torch.Tensor, normalized_shape, weight=None, eps=None) -> to
     if variant == RMSNormVariant.GROUPED_ROWS:
         compact_weight = weight if weight is not None else torch.ones(normalized_shape, dtype=input.dtype, device=input.device)
         kernel = _cached_make(_premake_grouped_rows, input.dtype)
-        kernel(input, compact_weight, eps, output, BLOCK_SIZE, normalized_numel)
+        kernel(input, compact_weight, eps, output, normalized_numel)
     elif variant == RMSNormVariant.ROWWISE:
         compact_weight = weight if weight is not None else torch.ones(normalized_shape, dtype=input.dtype, device=input.device)
         kernel = _cached_make(_premake_rowwise, input.dtype)
-        kernel(input, compact_weight, eps, output, BLOCK_SIZE, normalized_numel)
+        kernel(input, compact_weight, eps, output, normalized_numel)
     else:
         expanded_weight = weight.expand_as(input) if weight is not None else torch.ones_like(input)
         kernel = _cached_make(_premake_generic, input.ndim, len(normalized_shape))
