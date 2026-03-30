@@ -4,6 +4,7 @@ import importlib
 import os
 
 from vllm.logger import init_logger
+from vllm.platforms import current_platform
 
 from nt_ops.runtime import REQUIRED_PROCESS_SCOPE, get_capability_report, install
 
@@ -15,7 +16,6 @@ _DEFAULT_BASE_WORKER_CANDIDATES = (
     "vllm_mlu.v1.worker.worker.MLUWorker",
     "vllm_mlu.worker.mlu_worker.MLUWorker",
     "vllm_mlu.v1.worker.mlu_worker.MLUWorker",
-    "vllm.v1.worker.gpu_worker.Worker",
 )
 
 
@@ -35,9 +35,12 @@ def _resolve_obj_by_qualname(qualname: str) -> object:
 def _resolve_base_worker_cls() -> type:
     candidates: list[str] = []
     override = os.environ.get(_BASE_WORKER_ENV_VAR)
+    platform_device_type = getattr(current_platform, "device_type", "unknown")
     if override:
         candidates.append(override)
     candidates.extend(_DEFAULT_BASE_WORKER_CANDIDATES)
+    if getattr(current_platform, "is_cuda_alike", lambda: False)():
+        candidates.append("vllm.v1.worker.gpu_worker.Worker")
 
     errors: list[str] = []
     for qualname in candidates:
@@ -55,6 +58,7 @@ def _resolve_base_worker_cls() -> type:
 
     raise ImportError(
         "Unable to resolve a base vLLM worker class for nt_ops. "
+        f"Detected platform device_type={platform_device_type!r}. "
         f"Set {_BASE_WORKER_ENV_VAR} to the fully qualified worker class path. "
         f"Attempts: {'; '.join(errors)}"
     )
