@@ -12,6 +12,7 @@ logger = init_logger(__name__)
 
 _BASE_WORKER_ENV_VAR = "NT_OPS_VLLM_BASE_WORKER_CLS"
 _DEFAULT_BASE_WORKER_CANDIDATES = (
+    "vllm_mlu.v1.worker.gpu_worker.MLUWorker",
     "vllm_mlu.worker.worker.MLUWorker",
     "vllm_mlu.v1.worker.worker.MLUWorker",
     "vllm_mlu.worker.mlu_worker.MLUWorker",
