@@ -94,68 +94,67 @@ def _premake_generic(ndim, num_normalized_dims, input_dtype=None, weight_dtype=N
 
 # ---------------------------------------------------------------------------
 # ROWWISE variant — one program per row, tiles over hidden dim
+#
+# norm_size is a Python int baked in at compile time so that:
+#   1. it can be used as a constant in the application closure, and
+#   2. the weight Tensor's dimension gets a concrete upper_bound, avoiding
+#      an AttributeError in ninetoothed's autotune inequality checker.
 # ---------------------------------------------------------------------------
-def _arrangement_rowwise(input, weight, eps, output, normalized_numel):
-    arranged_input = input.tile((1, BLOCK_SIZE))
-    arranged_output = output.tile((1, BLOCK_SIZE))
-    arranged_weight = weight[None, None, :]
-    return arranged_input, arranged_weight, eps, arranged_output, normalized_numel
+def _premake_rowwise(input_dtype=None, norm_size=None):
+    def _arrangement(input, weight, eps, output):
+        arranged_input = input.tile((1, BLOCK_SIZE))
+        arranged_output = output.tile((1, BLOCK_SIZE))
+        arranged_weight = weight[None, None, :]
+        return arranged_input, arranged_weight, eps, arranged_output
 
+    def _application(input, weight, eps, output):
+        _sum_sq = ntl.zeros((1,), dtype=ntl.float32)
+        for i in range(input.shape[0]):
+            for j in range(input.shape[1]):
+                val = ntl.cast(input[i, j], ntl.float32)
+                _sum_sq[0] += val * val
+        rms = ntl.sqrt(_sum_sq[0] / norm_size + eps)
+        for i in range(input.shape[0]):
+            for j in range(input.shape[1]):
+                output[i, j] = input[i, j] / rms * weight[0, 0, j]
 
-def _application_rowwise(input, weight, eps, output, normalized_numel):
-    _sum_sq = ntl.zeros((1,), dtype=ntl.float32)
-    for i in range(input.shape[0]):
-        for j in range(input.shape[1]):
-            val = ntl.cast(input[i, j], ntl.float32)
-            _sum_sq[0] += val * val
-    rms = ntl.sqrt(_sum_sq[0] / normalized_numel + eps)
-    for i in range(input.shape[0]):
-        for j in range(input.shape[1]):
-            output[i, j] = input[i, j] / rms * weight[0, 0, j]
-
-
-def _premake_rowwise(input_dtype=None, normalized_numel=None):
     tensors = (
         Tensor(2, other=0, dtype=input_dtype),
-        Tensor(1, dtype=input_dtype),
+        Tensor(1, dtype=input_dtype, shape_options=({"upper_bound": norm_size},)),
         Tensor(0, dtype=ninetoothed.float64),
         Tensor(2, dtype=input_dtype),
-        Tensor(0, dtype=ninetoothed.int64),
     )
-    return _arrangement_rowwise, _application_rowwise, tensors
+    return _arrangement, _application, tensors
 
 
 # ---------------------------------------------------------------------------
 # GROUPED_ROWS variant — ROWS_PER_PROGRAM rows per program, reduces grid size
 # ---------------------------------------------------------------------------
-def _arrangement_grouped_rows(input, weight, eps, output, normalized_numel):
-    arranged_input = input.tile((ROWS_PER_PROGRAM, BLOCK_SIZE))
-    arranged_output = output.tile((ROWS_PER_PROGRAM, BLOCK_SIZE))
-    arranged_weight = weight[None, None, :]
-    return arranged_input, arranged_weight, eps, arranged_output, normalized_numel
+def _premake_grouped_rows(input_dtype=None, norm_size=None):
+    def _arrangement(input, weight, eps, output):
+        arranged_input = input.tile((ROWS_PER_PROGRAM, BLOCK_SIZE))
+        arranged_output = output.tile((ROWS_PER_PROGRAM, BLOCK_SIZE))
+        arranged_weight = weight[None, None, :]
+        return arranged_input, arranged_weight, eps, arranged_output
 
+    def _application(input, weight, eps, output):
+        _sum_sq = ntl.zeros((ROWS_PER_PROGRAM,), dtype=ntl.float32)
+        for i in range(input.shape[0]):
+            for j in range(input.shape[1]):
+                val = ntl.cast(input[i, j], ntl.float32)
+                _sum_sq[i] += val * val
+        rms = ntl.sqrt(_sum_sq / norm_size + eps)
+        for i in range(input.shape[0]):
+            for j in range(input.shape[1]):
+                output[i, j] = input[i, j] / rms[i] * weight[0, 0, j]
 
-def _application_grouped_rows(input, weight, eps, output, normalized_numel):
-    _sum_sq = ntl.zeros((ROWS_PER_PROGRAM,), dtype=ntl.float32)
-    for i in range(input.shape[0]):
-        for j in range(input.shape[1]):
-            val = ntl.cast(input[i, j], ntl.float32)
-            _sum_sq[i] += val * val
-    rms = ntl.sqrt(_sum_sq / normalized_numel + eps)
-    for i in range(input.shape[0]):
-        for j in range(input.shape[1]):
-            output[i, j] = input[i, j] / rms[i] * weight[0, 0, j]
-
-
-def _premake_grouped_rows(input_dtype=None, normalized_numel=None):
     tensors = (
         Tensor(2, other=0, dtype=input_dtype),
-        Tensor(1, dtype=input_dtype),
+        Tensor(1, dtype=input_dtype, shape_options=({"upper_bound": norm_size},)),
         Tensor(0, dtype=ninetoothed.float64),
         Tensor(2, dtype=input_dtype),
-        Tensor(0, dtype=ninetoothed.int64),
     )
-    return _arrangement_grouped_rows, _application_grouped_rows, tensors
+    return _arrangement, _application, tensors
 
 
 # ---------------------------------------------------------------------------
@@ -214,12 +213,12 @@ def rms_norm(input: torch.Tensor, normalized_shape, weight=None, eps=None) -> to
 
     if variant == RMSNormVariant.GROUPED_ROWS:
         compact_weight = weight if weight is not None else torch.ones(normalized_shape, dtype=input.dtype, device=input.device)
-        kernel = _cached_make(_premake_grouped_rows, input.dtype)
-        kernel(input, compact_weight, eps, output, normalized_numel)
+        kernel = _cached_make(_premake_grouped_rows, input.dtype, normalized_numel)
+        kernel(input, compact_weight, eps, output)
     elif variant == RMSNormVariant.ROWWISE:
         compact_weight = weight if weight is not None else torch.ones(normalized_shape, dtype=input.dtype, device=input.device)
-        kernel = _cached_make(_premake_rowwise, input.dtype)
-        kernel(input, compact_weight, eps, output, normalized_numel)
+        kernel = _cached_make(_premake_rowwise, input.dtype, normalized_numel)
+        kernel(input, compact_weight, eps, output)
     else:
         expanded_weight = weight.expand_as(input) if weight is not None else torch.ones_like(input)
         kernel = _cached_make(_premake_generic, input.ndim, len(normalized_shape))
