@@ -19,28 +19,22 @@ class PatchSpec:
     builder: PatchBuilder | None = None
 
 
+def _rms_forward_oot_builder(original: object) -> object:
+    from nt_ops import rms
+
+    return rms.build_rms_forward_oot(original)
+
+
 def _activation_silu_builder(original: object) -> object:
     from nt_ops import activation
 
     return activation.silu_and_mul_forward
 
 
-def _rms_builder(original: object) -> object:
-    from nt_ops import rms
-
-    return rms.rms_norm_helper
-
-
-def _fused_rms_builder(original: object) -> object:
-    from nt_ops import rms
-
-    return rms.fused_add_rms_norm_helper
-
-
-def _rope_builder(original: object) -> object:
+def _rope_forward_oot_builder(original: object) -> object:
     from nt_ops import rope
 
-    return rope.build_rotary_forward_cuda(original)
+    return rope.build_rotary_forward_oot(original)
 
 
 QWEN3_MINIMAL_DENSE_PROFILE = CapabilityProfile(
@@ -55,31 +49,38 @@ _PROFILES: dict[str, tuple[CapabilityProfile, tuple[PatchSpec, ...]]] = {
     QWEN3_MINIMAL_DENSE_PROFILE.name: (
         QWEN3_MINIMAL_DENSE_PROFILE,
         (
+            # Single patch on RMSNorm.forward_oot covers both rms_norm and
+            # fused_add_rms_norm: dispatch_forward on out-of-tree platforms
+            # binds _forward_method to self.forward_oot, which previously
+            # resolved to forward_native (or an MLU override).  Patching
+            # forward_oot intercepts both residual and non-residual paths.
             PatchSpec(
                 patch_id="rms_norm",
                 module_path="vllm.model_executor.layers.layernorm",
-                attr_name="rms_norm",
-                builder=_rms_builder,
+                object_name="RMSNorm",
+                attr_name="forward_oot",
+                builder=_rms_forward_oot_builder,
             ),
-            PatchSpec(
-                patch_id="fused_add_rms_norm",
-                module_path="vllm.model_executor.layers.layernorm",
-                attr_name="fused_add_rms_norm",
-                builder=_fused_rms_builder,
-            ),
+            # Patch forward_oot (not forward): CustomOp.forward dispatches
+            # via self._forward_method which is bound to self.forward_oot on
+            # out-of-tree platforms.  Replacing forward_oot at the class
+            # level before model instantiation ensures _forward_method points
+            # to our implementation.
             PatchSpec(
                 patch_id="silu_and_mul",
                 module_path="vllm.model_executor.layers.activation",
                 object_name="SiluAndMul",
-                attr_name="forward",
+                attr_name="forward_oot",
                 builder=_activation_silu_builder,
             ),
+            # Same reasoning: patch forward_oot on RotaryEmbedding, and drop
+            # the is_cuda guard that always short-circuits on MLU tensors.
             PatchSpec(
                 patch_id="rope",
                 module_path="vllm.model_executor.layers.rotary_embedding.base",
                 object_name="RotaryEmbedding",
-                attr_name="forward_cuda",
-                builder=_rope_builder,
+                attr_name="forward_oot",
+                builder=_rope_forward_oot_builder,
             ),
         ),
     )
@@ -91,3 +92,4 @@ def get_profile(profile_name: str) -> tuple[CapabilityProfile, tuple[PatchSpec, 
         return _PROFILES[profile_name]
     except KeyError as exc:
         raise ValueError(f"Unknown nt_ops profile: {profile_name}") from exc
+

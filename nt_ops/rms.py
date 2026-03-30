@@ -50,3 +50,34 @@ def fused_add_rms_norm_helper(
     x.copy_(output)
     residual.copy_(residual_out)
     return x, residual
+
+
+def build_rms_forward_oot(original):
+    """Replace RMSNorm.forward_oot to intercept all MLU dispatch paths.
+
+    ``dispatch_forward`` on out-of-tree platforms binds ``_forward_method``
+    to ``self.forward_oot`` (which by default calls ``forward_native``).
+    Patching this method ensures our kernels are reached regardless of
+    whether the prior occupant was the base-class fallback or an MLU-
+    specific override saved as ``original``.
+
+    Falls back to ``original`` for unsupported edge cases
+    (variance_size_override, no weight) so MLU correctness is preserved.
+    """
+
+    def forward_oot(self, x: torch.Tensor, residual: torch.Tensor | None = None):
+        # Edge cases not supported by ntops kernels — delegate to whatever
+        # was there before (MLU kernel or PyTorch-native fallback).
+        if getattr(self, "variance_size_override", None) is not None:
+            return original(self, x, residual)
+        if not getattr(self, "has_weight", True):
+            return original(self, x, residual)
+
+        weight = self.weight.data
+        eps = self.variance_epsilon
+
+        if residual is not None:
+            return fused_add_rms_norm_helper(x, residual, weight, eps)
+        return rms_norm_helper(x, weight, eps)
+
+    return forward_oot

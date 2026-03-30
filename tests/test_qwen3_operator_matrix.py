@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 torch = pytest.importorskip("torch")
 
-from nt_ops.rope import build_rotary_forward_cuda
+from nt_ops.rope import build_rotary_forward_oot
 from nt_ops.rms import fused_add_rms_norm_helper, rms_norm_helper
 from vllm.model_executor.layers.layernorm import RMSNorm
 from vllm.model_executor.layers.rotary_embedding.base import RotaryEmbedding
@@ -52,7 +52,7 @@ def test_fused_add_rms_norm_helper_matches_vllm_forward_static():
     assert torch.allclose(residual_out, reference_residual, rtol=0.01, atol=0.01)
 
 
-def test_rope_forward_cuda_adapter_matches_vllm_forward_static():
+def test_rope_forward_oot_adapter_matches_vllm_forward_static():
     rotary = RotaryEmbedding(
         head_size=8,
         rotary_dim=8,
@@ -61,7 +61,7 @@ def test_rope_forward_cuda_adapter_matches_vllm_forward_static():
         is_neox_style=True,
         dtype=torch.float16,
     ).cuda()
-    patched_forward = build_rotary_forward_cuda(RotaryEmbedding.forward_cuda)
+    patched_forward = build_rotary_forward_oot(RotaryEmbedding.forward_oot)
 
     positions = torch.arange(0, 6, device="cuda", dtype=torch.long)
     query = torch.randn(6, 16, device="cuda", dtype=torch.float16)
