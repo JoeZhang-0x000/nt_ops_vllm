@@ -6,8 +6,6 @@ import os
 
 from vllm import LLM, SamplingParams
 
-import nt_ops
-
 PROMPTS = [
     "Hello, my name is",
     "The president of the United States is",
@@ -25,6 +23,19 @@ def _parse_args() -> argparse.Namespace:
         default=os.environ.get("NT_OPS_VLLM_MODEL_PATH"),
         help="Path or HF id for the Qwen3 model.",
     )
+    parser.add_argument(
+        "--worker-cls",
+        default=os.environ.get("NT_OPS_VLLM_WORKER_CLS", "nt_ops.worker.NTVLLMWorker"),
+        help="Fully qualified worker class used inside vLLM worker processes.",
+    )
+    parser.add_argument(
+        "--base-worker-cls",
+        default=os.environ.get("NT_OPS_VLLM_BASE_WORKER_CLS"),
+        help=(
+            "Optional fully qualified vLLM base worker class. "
+            "Use this when the platform worker cannot be auto-resolved."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -35,10 +46,15 @@ def main() -> None:
             "Set NT_OPS_VLLM_MODEL_PATH or pass --model to run the basic example."
         )
 
-    nt_ops.install(process_scope="exclusive_qwen3")
-    print("NT capability report:", nt_ops.get_capability_report())
+    if args.base_worker_cls:
+        os.environ["NT_OPS_VLLM_BASE_WORKER_CLS"] = args.base_worker_cls
 
-    llm = LLM(model=args.model, enforce_eager=True)
+    llm = LLM(
+        model=args.model,
+        enforce_eager=True,
+        worker_cls=args.worker_cls,
+    )
+    print("NT worker reports before:", llm.collective_rpc("get_nt_ops_report"))
     outputs = llm.generate(PROMPTS, SAMPLING_PARAMS)
 
     print("\nGenerated Outputs:\n" + "-" * 60)
@@ -49,7 +65,7 @@ def main() -> None:
         print(f"Output:    {generated_text!r}")
         print("-" * 60)
 
-    print("NT capability report:", nt_ops.get_capability_report())
+    print("NT worker reports after:", llm.collective_rpc("get_nt_ops_report"))
 
 
 if __name__ == "__main__":
