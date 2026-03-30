@@ -1,37 +1,53 @@
-This document aims to represent the correctness of the Ninetoothed operators.
+This document describes the current correctness target for the first-phase
+`qwen3_minimal_dense` profile.
 
-## Original VLLM
-Just remove the `import nt_ops` in the `nt_ops_vllm/examples/basic.py` and run the example. We will get the expected output.
+## Scope
 
+The profile only claims NT-backed correctness for:
+
+- `RMSNorm`
+- fused add + `RMSNorm` helper path
+- `RoPE`
+- `SiluAndMul`
+
+It does not claim NT-backed correctness for:
+
+- `attention`
+- general `GEMM`
+- `lm_head`
+- `embedding`
+- `logits_processor`
+- `sampler`
+
+Those components intentionally remain on vLLM fallbacks in this phase.
+
+## Validation Layers
+
+Correctness is checked in three layers:
+
+1. Runtime installation tests
+   These verify that patch application is explicit, transactional, and rollback-safe.
+
+2. Operator matrix tests
+   These compare the NT-backed adapters against vLLM or PyTorch references for:
+   - `RMSNorm`
+   - fused add + `RMSNorm`
+   - `RoPE`
+
+3. Qwen3 smoke test
+   When `NT_OPS_VLLM_MODEL_PATH` is provided in a CUDA environment, the basic smoke
+   test verifies that `LLM.generate()` completes and that the NT capability report
+   records hits for the intended patched components.
+
+## Manual Check
+
+To manually validate the profile:
+
+```bash
+export NT_OPS_VLLM_MODEL_PATH=/path/to/Qwen3-0.6B
+python examples/basic.py
 ```
-Generated Outputs:
-------------------------------------------------------------
-Prompt:    'Hello, my name is'
-Output:    " Josh and I'm in the middle of a project to develop a hybrid mobile app. I'm looking for guidance on how to go about using modular frameworks. I want to use React and Vue. I need to decide on the framework to use. Can you help me choose the right framework and suggest some best practices for using them?\n\nAdditionally, I want to know what are the best practices for using a modular framework in the context of a web application? Also, what are the best practices for using a"
-------------------------------------------------------------
-Prompt:    'The president of the United States is'
-Output:    ' the most powerful individual in the world, but what about the most powerful individual in the world who is also a woman? The most powerful individual in the world who is also a woman, especially in the second half of the 20th century. The president of the United States is the most powerful individual in the world. This is the first time in history that a woman president has been elected to the presidency. The only question is, what is the most powerful individual in the world who is also'
-------------------------------------------------------------
-Prompt:    'The capital of France is'
-Output:    ' Paris. Therefore, the capital of Paris is Paris. This is an example of __________.\n\nThe correct answer is: [list]\n\nOptions: A. A fallacy of composition\n\nB. A fallacy of composition\n\nC. A fallacy of division\n\nD. A fallacy of definition\n\nAnswer: \\boxed{C}\n\nExplanation: The capital of France is Paris, and Paris is the capital of France. Therefore, the capital of Paris is Paris. This is an example of a'
-------------------------------------------------------------
-Prompt:    'The future of AI is'
-Output:    ' becoming more interesting and plausible, especially in the areas of the fusion of AI with other technologies. The study of AI and its development is evolving rapidly, and researchers are exploring new ways to implement AI in existing systems, including AI systems that are powered by neural networks. These systems are becoming more popular as they offer advanced capabilities. However, there is a lot of controversy and debate regarding their use in various sectors, including healthcare, education, and manufacturing. For example, in the healthcare sector, AI can'
-------------------------------------------------------------
-```
-## With NT
-```
-Generated Outputs:
-------------------------------------------------------------
-Prompt:    'Hello, my name is'
-Output:    " Josh Eurasian. I'm very curious to know if there are any healthy ways to improve the health and life quality of the elderly people, and how to help them to live better in the future. I'm looking for the steps that are effective for this. I don't want to make the whole world better, but rather to help the elderly people to live better. Thank you very much for your help. Thank you again for your kind response!\nHello! Well, I understand your concern about improving"
-------------------------------------------------------------
-Prompt:    'The president of the United States is'
-Output:    ' the most powerful individual in the world, but what about the most powerful individual in the world who is also a woman? The most powerful individual in the world who is also a woman, especially in the second half of the 20th century. The president of the United States is the most powerful individual in the world. What about the other female leaders who are also the most powerful individuals? The answer is that they are not powerful, but the most powerful individual in the world is the president of'
-------------------------------------------------------------
-Prompt:    'The capital of France is'
-Output:    ' Paris. Therefore, the capital of Paris is Paris. This is an example of __________.\n\nThe correct answer is: [list]\n\nOptions: A. A fallacy of composition\n\nB. A fallacy of composition\n\nC. A fallacy of division\n\nD. A fallacy of definition\n\nAnswer: \\boxed{C}\n\nExplanation: The capital of France is Paris, and Paris is the capital of France. Therefore, the capital of Paris is Paris. This is an example of a'
-------------------------------------------------------------
-Prompt:    'The future of AI is'
-Output:    ' becoming more interesting and plausible, especially in the areas of the fusion of AI with other technologies. The study of AI and its development is evolving rapidly, and researchers are exploring new ways to implement it in existing systems, including AI systems that are powered by neural networks. These systems are becoming more popular as they offer advanced capabilities. However, there is a lot of controversy and debate regarding their use in various sectors, including healthcare, education, and manufacturing. For example, in the healthcare sector, AI can'
-```
+
+At the end of the run, inspect the printed capability report. A valid first-phase
+run should show non-zero hits for NT-backed Qwen3 components and keep fallback
+components unpatched.

@@ -1,66 +1,73 @@
 # NT Ops for vLLM
 
-## TODO
+## Current Scope
 
-* [x] [Correctness](doc/correctness.md)
-* [ ] [Flexibility](doc/cross_platform.md)
-* [ ] [Performance](doc/performance.md)
+This repository currently targets a narrow first phase:
 
-## Project Introduction
+- single-process, single-GPU CUDA execution
+- Qwen3 minimal dense path
+- NT-backed `RMSNorm`, `RoPE`, and `SiluAndMul`
+- vLLM fallback for `attention`, general `GEMM`, `lm_head`, `embedding`, `logits_processor`, and `sampler`
 
-This project aims to replace the default operators in [vLLM](https://github.com/vllm-project/vllm) with high-performance operators from [Ninetoothed](https://github.com/InfiniTensor/ninetoothed). By integrating Ninetoothed, we strive to enhance the inference efficiency and flexibility of vLLM.
+The runtime profile is process-wide. It is only intended for an exclusive Qwen3 process.
 
 ## Quick Start
 
-Follow the steps below to set up the environment and run the example.
+### 1. Install dependencies
 
-### 1. Install Ninetoothed
-
-First, clone and install the Ninetoothed library:
+Install local editable copies of:
 
 ```bash
-git clone https://github.com/InfiniTensor/ninetoothed.git
-cd ninetoothed
-pip install -e .
+cd ninetoothed && pip install -e .
+cd ../ntops && pip install -e .
+cd ../vllm && pip install -e .
+cd ../nt_ops_vllm && pip install -e .
 ```
 
+### 2. Run the basic example
 
-### 2. Install vLLM
-
-Next, clone and install the vLLM library:
+Set the model path explicitly and run the example:
 
 ```bash
-git clone https://github.com/vllm-project/vllm.git
-cd vllm
-pip install -e .
+export NT_OPS_VLLM_MODEL_PATH=/path/to/Qwen3-0.6B
+python examples/basic.py
 ```
 
+The example calls:
 
-### 3. Install NT Ops for vLLM
-
-Now, clone and install this library:
-
-```bash
-git clone git@github.com:JoeZhang-0x000/nt_ops_vllm.git
-cd nt_ops_vllm
-pip install -e .
+```python
+nt_ops.install(process_scope="exclusive_qwen3")
 ```
 
+before creating the `LLM` instance.
 
-### 4. Run Example
+## Runtime Behavior
 
-Finally, run the example to verify the installation:
+`nt_ops.install()` applies a process-wide patch profile. The default profile is `qwen3_minimal_dense`.
 
-```bash
-VLLM_ATTENTION_BACKEND=TRITON_ATTN python examples/basic.py
+You can inspect the active runtime state and capability report:
+
+```python
+import nt_ops
+
+state = nt_ops.get_runtime_state()
+report = nt_ops.get_capability_report()
 ```
+
+The capability report distinguishes:
+
+- `enabled`: components currently patched to NT-backed implementations
+- `fallback`: components intentionally left on vLLM
+- `disabled`: components explicitly out of scope for the active profile
+- `hits`: runtime hit counters for patched components
 
 ## Debugging
 
-To facilitate debugging and verification, we provide highlighted INFO logs. After running the example above, check your console output for the following messages:
-```
-(EngineCore_DP0 pid=3127755) [2025-12-10 15:54:29] INFO rms.py:325: NT RMS is enabled.
-(EngineCore_DP0 pid=3127755) [2025-12-10 15:54:29] INFO linear.py:156: NT GEMM is enabled.
-(EngineCore_DP0 pid=3127755) [2025-12-10 15:54:29] INFO activation.py:67: NT SILU AND MUL is enabled.
-```
-If you see these logs, it indicates that the Ninetoothed operators have been successfully enabled and are replacing the default vLLM operators.
+After a successful run, the capability report should show hit counts for:
+
+- `rms_norm`
+- `fused_add_rms_norm`
+- `rope`
+- `silu_and_mul`
+
+If those hit counters stay at zero, the process did not execute the intended NT-backed Qwen3 path.

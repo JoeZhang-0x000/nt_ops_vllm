@@ -1,28 +1,46 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
+import argparse
+import os
+
 from vllm import LLM, SamplingParams
+
 import nt_ops
 
-# Sample prompts.
-prompts = [
+PROMPTS = [
     "Hello, my name is",
     "The president of the United States is",
     "The capital of France is",
     "The future of AI is",
 ]
-# Create a sampling params object.
-sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=100)
+
+SAMPLING_PARAMS = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=100)
 
 
-def main():
-    # Create an LLM.
-    llm = LLM(model="/root/huggingface/Qwen3-0.6B", enforce_eager=True)
-    # Generate texts from the prompts.
-    # The output is a list of RequestOutput objects
-    # that contain the prompt, generated text, and other information.
-    outputs = llm.generate(prompts, sampling_params)
-    # Print the outputs.
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--model",
+        default=os.environ.get("NT_OPS_VLLM_MODEL_PATH"),
+        help="Path or HF id for the Qwen3 model.",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
+    if not args.model:
+        raise SystemExit(
+            "Set NT_OPS_VLLM_MODEL_PATH or pass --model to run the basic example."
+        )
+
+    nt_ops.install(process_scope="exclusive_qwen3")
+    print("NT capability report:", nt_ops.get_capability_report())
+
+    llm = LLM(model=args.model, enforce_eager=True)
+    outputs = llm.generate(PROMPTS, SAMPLING_PARAMS)
+
     print("\nGenerated Outputs:\n" + "-" * 60)
     for output in outputs:
         prompt = output.prompt
@@ -30,6 +48,8 @@ def main():
         print(f"Prompt:    {prompt!r}")
         print(f"Output:    {generated_text!r}")
         print("-" * 60)
+
+    print("NT capability report:", nt_ops.get_capability_report())
 
 
 if __name__ == "__main__":
