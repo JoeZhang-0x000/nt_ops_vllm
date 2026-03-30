@@ -165,38 +165,23 @@ def _premake_grouped_rows(input_dtype=None, norm_size=None):
 # ---------------------------------------------------------------------------
 # Variant selection
 # ---------------------------------------------------------------------------
-def _can_view_as_2d_contiguous(input, normalized_numel):
-    if input.dim() < 2:
-        return False, None
-    outer_numel = input.numel() // normalized_numel
-    if outer_numel * normalized_numel != input.numel():
-        return False, None
-    if input.stride(-1) != 1:
-        return False, None
-    for dim in range(input.dim() - 1):
-        if input.size(dim) > 1 and input.stride(dim) != input.stride(dim + 1) * input.size(dim + 1):
-            return False, None
-    return True, outer_numel
-
-
 def _select_variant(input, normalized_shape, weight):
+    # Only support single-dim normalization on fp16/bf16 with compatible weight.
     if len(normalized_shape) != 1:
         return RMSNormVariant.GENERIC
-
-    normalized_numel = normalized_shape[0]
-    can_view_2d, outer_numel = _can_view_as_2d_contiguous(input, normalized_numel)
-    if not can_view_2d:
-        return RMSNormVariant.GENERIC
     if input.dtype not in (torch.float16, torch.bfloat16):
+        return RMSNormVariant.GENERIC
+    normalized_numel = normalized_shape[0]
+    if input.numel() % normalized_numel != 0:
         return RMSNormVariant.GENERIC
     if weight is not None and weight.shape != (normalized_numel,):
         return RMSNormVariant.GENERIC
 
-    # Use GROUPED_ROWS when outer_numel is large enough for perf OR when
-    # ROWWISE grid would exceed hardware limits (e.g. MLU caps at 65535).
-    if outer_numel >= 256 and normalized_numel <= 2048:
-        return RMSNormVariant.GROUPED_ROWS
-    if outer_numel > _MAX_GRID_SIZE:
+    # Fast-path: the dispatch will reshape to 2D, so no contiguity check needed.
+    outer_numel = input.numel() // normalized_numel
+    # Use GROUPED_ROWS when outer_numel is large (perf) or when ROWWISE grid
+    # would exceed hardware limits (e.g. MLU caps at 65535).
+    if (outer_numel >= 256 and normalized_numel <= 2048) or outer_numel > _MAX_GRID_SIZE:
         return RMSNormVariant.GROUPED_ROWS
     return RMSNormVariant.ROWWISE
 
@@ -216,15 +201,26 @@ def rms_norm(input: torch.Tensor, normalized_shape, weight=None, eps=None) -> to
     output = torch.empty_like(input)
     variant = _select_variant(input, normalized_shape, weight)
 
-    if variant == RMSNormVariant.GROUPED_ROWS:
+    if variant in (RMSNormVariant.GROUPED_ROWS, RMSNormVariant.ROWWISE):
+        # Reshape to 2D so the kernel always sees [outer, normalized].
+        # reshape() is a free view for contiguous tensors; for non-contiguous
+        # tensors (e.g. 3D q_by_head after attention head splitting) it makes
+        # a contiguous copy, which is necessary for the kernel to work correctly.
+        outer_numel = input.numel() // normalized_numel
+        input_2d = input.reshape(outer_numel, normalized_numel)
+        output_2d = output.reshape(outer_numel, normalized_numel)
         compact_weight = weight if weight is not None else torch.ones(normalized_shape, dtype=input.dtype, device=input.device)
-        kernel = _cached_make(_premake_grouped_rows, input.dtype, normalized_numel)
-        kernel(input, compact_weight, eps, output, normalized_numel)
-    elif variant == RMSNormVariant.ROWWISE:
-        compact_weight = weight if weight is not None else torch.ones(normalized_shape, dtype=input.dtype, device=input.device)
-        kernel = _cached_make(_premake_rowwise, input.dtype, normalized_numel)
-        kernel(input, compact_weight, eps, output, normalized_numel)
+        if variant == RMSNormVariant.GROUPED_ROWS:
+            kernel = _cached_make(_premake_grouped_rows, input.dtype, normalized_numel)
+            kernel(input_2d, compact_weight, eps, output_2d, normalized_numel)
+        else:
+            kernel = _cached_make(_premake_rowwise, input.dtype, normalized_numel)
+            kernel(input_2d, compact_weight, eps, output_2d, normalized_numel)
     else:
+        # GENERIC fallback — if the grid would exceed hardware limits, use native.
+        outer_numel = input.numel() // normalized_numel
+        if outer_numel > _MAX_GRID_SIZE:
+            return torch.nn.functional.rms_norm(input, normalized_shape, weight=weight, eps=eps)
         expanded_weight = weight.expand_as(input) if weight is not None else torch.ones_like(input)
         kernel = _cached_make(_premake_generic, input.ndim, len(normalized_shape))
         kernel(input, expanded_weight, eps, output, normalized_numel)
