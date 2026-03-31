@@ -44,13 +44,19 @@ def main():
         print("-" * 60)
 
     try:
-        reports = llm.llm_engine.model_executor.execute_method("get_nt_ops_report")
+        engine = llm.llm_engine
+        # vLLM v1 wraps LLMEngine inside an inner engine attribute
+        if not hasattr(engine, "model_executor") and hasattr(engine, "engine"):
+            engine = engine.engine
+        executor = engine.model_executor
+        reports = executor.execute_method("get_nt_ops_report")
         report = reports[0] if isinstance(reports, list) else reports
         print("\nnt_ops capability report:\n" + "-" * 60)
         print(json.dumps(report, indent=2))
         print("-" * 60)
     except Exception as exc:
         print(f"\n[nt_ops] Could not retrieve report: {exc}")
+        print(f"[nt_ops] llm_engine attrs: {[a for a in dir(llm.llm_engine) if not a.startswith('_')]}")
 
 
 if __name__ == "__main__":
