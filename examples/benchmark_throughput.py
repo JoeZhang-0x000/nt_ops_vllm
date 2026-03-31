@@ -18,6 +18,7 @@ from typing import List, Tuple
 
 from vllm import LLM, SamplingParams
 import nt_ops
+from nt_ops.worker import NTVLLMWorker
 
 
 def build_prompts(input_len: int, batch_size: int) -> List[str]:
@@ -108,15 +109,14 @@ def main() -> None:
         max_tokens=args.output_len,
     )
 
-    llm = LLM(model=args.model, enforce_eager=args.enforce_eager)
+    # NTVLLMWorker calls nt_ops.install() inside the worker process (before model init).
+    # This is required because vLLM uses spawn multiprocessing — patches applied in the
+    # main process are not visible in worker processes.
+    worker = NTVLLMWorker if not args.no_nt_ops else None
+    llm = LLM(model=args.model, enforce_eager=args.enforce_eager,
+              **({"worker_cls": worker} if worker else {}))
 
-    if not args.no_nt_ops:
-        state = nt_ops.install(
-            profile="qwen3_minimal_dense",
-            process_scope=nt_ops.runtime.REQUIRED_PROCESS_SCOPE,
-        )
-        print(f"nt_ops installed: {state.status}  patches={state.applied_patch_ids}")
-    else:
+    if args.no_nt_ops:
         print("nt_ops skipped (baseline mode)")
 
     prompts = build_prompts(args.input_len, args.batch_size)
