@@ -5,7 +5,7 @@ import argparse
 
 from vllm import LLM, SamplingParams
 import nt_ops
-from nt_ops.worker import NTVLLMWorker
+_NT_OPS_WORKER_CLS = "nt_ops.worker.NTVLLMWorker"
 
 PROMPTS = [
     "Hello, my name is",
@@ -31,7 +31,7 @@ def main():
     )
 
     llm = LLM(model=args.model, enforce_eager=args.enforce_eager,
-              worker_cls=NTVLLMWorker)
+              worker_cls=_NT_OPS_WORKER_CLS)
     outputs = llm.generate(PROMPTS, sampling_params)
 
     print("\nGenerated Outputs:\n" + "-" * 60)
