@@ -1,28 +1,37 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
+import argparse
+
 from vllm import LLM, SamplingParams
 import nt_ops
 
-# Sample prompts.
-prompts = [
+PROMPTS = [
     "Hello, my name is",
     "The president of the United States is",
     "The capital of France is",
     "The future of AI is",
 ]
-# Create a sampling params object.
-sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=100)
 
 
 def main():
-    # Create an LLM.
-    llm = LLM(model="/root/huggingface/Qwen3-0.6B", enforce_eager=True)
-    # Generate texts from the prompts.
-    # The output is a list of RequestOutput objects
-    # that contain the prompt, generated text, and other information.
-    outputs = llm.generate(prompts, sampling_params)
-    # Print the outputs.
+    parser = argparse.ArgumentParser(description="Basic nt_ops + vLLM generation example")
+    parser.add_argument("--model", required=True, help="Path or HF repo of the model")
+    parser.add_argument("--max-tokens", type=int, default=100)
+    parser.add_argument("--temperature", type=float, default=0.8)
+    parser.add_argument("--top-p", type=float, default=0.95)
+    parser.add_argument("--enforce-eager", action="store_true", default=True)
+    args = parser.parse_args()
+
+    sampling_params = SamplingParams(
+        temperature=args.temperature,
+        top_p=args.top_p,
+        max_tokens=args.max_tokens,
+    )
+
+    llm = LLM(model=args.model, enforce_eager=args.enforce_eager)
+    outputs = llm.generate(PROMPTS, sampling_params)
+
     print("\nGenerated Outputs:\n" + "-" * 60)
     for output in outputs:
         prompt = output.prompt
