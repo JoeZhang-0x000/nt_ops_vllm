@@ -46,6 +46,12 @@ cd nt_ops_vllm
 pip install -e .
 ```
 
+> **Note:** This repo vendors the `ntops` operator package directly. If you previously installed the upstream `ntops` package separately, uninstall it first to avoid namespace conflicts:
+> ```bash
+> pip uninstall ntops
+> pip install -e .
+> ```
+
 
 ### 4. Run Example
 

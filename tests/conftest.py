@@ -13,7 +13,6 @@ def _append_path(path: Path) -> None:
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
 _append_path(WORKSPACE_ROOT / "vllm")
-_append_path(WORKSPACE_ROOT / "ntops" / "src")
 _append_path(WORKSPACE_ROOT / "ninetoothed")
 
 

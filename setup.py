@@ -4,5 +4,9 @@ setup(
     name="nt_ops",
     version="0.1.0",
     packages=find_packages(),
-    python_requires='>=3.6',
+    python_requires='>=3.10',
+    install_requires=[
+        "torch",
+        "ninetoothed>=0.16.0",
+    ],
 )
