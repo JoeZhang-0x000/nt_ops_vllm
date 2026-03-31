@@ -9,6 +9,8 @@ import torch.nn.functional as F
 from vllm.logger import init_logger
 from triton.language.extra import libdevice
 
+from nt_ops.capabilities import record_hit
+
 logger = init_logger(__name__)
 
 class SiluAndMul:
@@ -65,6 +67,7 @@ direct_register_custom_op("nt_silu_and_mul", siluAndMul, fake_impl=fake_siluAndM
 
 def silu_and_mul_forward(self, x: torch.Tensor) -> torch.Tensor:
     logger.info_once("\033[32mNT SILU AND MUL is enabled.\033[0m")
+    record_hit("silu_and_mul")
     return torch.ops.vllm.nt_silu_and_mul(x)
 
 

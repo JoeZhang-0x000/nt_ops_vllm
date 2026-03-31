@@ -1,8 +1,19 @@
-from nt_ops import linear
-from nt_ops import activation
-from nt_ops import rms
-from nt_ops import attention
+from nt_ops.capabilities import reset_hits
+from nt_ops.runtime import (
+    InstallationError,
+    RuntimeState,
+    get_capability_report,
+    get_runtime_state,
+    install,
+    uninstall,
+)
 
-
-# make sure monkey_patch is the last import
-from nt_ops import monkey_patch
+__all__ = [
+    "InstallationError",
+    "RuntimeState",
+    "get_capability_report",
+    "get_runtime_state",
+    "install",
+    "reset_hits",
+    "uninstall",
+]
