@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
 import argparse
+import json
 
 from vllm import LLM, SamplingParams
 import nt_ops
@@ -41,6 +42,15 @@ def main():
         print(f"Prompt:    {prompt!r}")
         print(f"Output:    {generated_text!r}")
         print("-" * 60)
+
+    try:
+        reports = llm.llm_engine.model_executor.execute_method("get_nt_ops_report")
+        report = reports[0] if isinstance(reports, list) else reports
+        print("\nnt_ops capability report:\n" + "-" * 60)
+        print(json.dumps(report, indent=2))
+        print("-" * 60)
+    except Exception as exc:
+        print(f"\n[nt_ops] Could not retrieve report: {exc}")
 
 
 if __name__ == "__main__":
