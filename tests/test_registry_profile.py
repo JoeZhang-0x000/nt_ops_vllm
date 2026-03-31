@@ -15,6 +15,8 @@ def test_qwen3_minimal_dense_profile_matches_qwen3_runtime_path():
         "rms_norm",
         "silu_and_mul",
     )
+    assert specs[1].module_path == "vllm_mlu._mlu_ops"
+    assert specs[1].attr_name == "active"
     assert "rope" in profile.fallback
     assert "gelu_and_mul" in profile.fallback
     assert "xielu" in profile.fallback

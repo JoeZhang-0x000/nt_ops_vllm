@@ -26,9 +26,9 @@ def _rms_forward_oot_builder(original: object) -> object:
 
 
 def _activation_silu_builder(original: object) -> object:
-    from nt_ops import activation
+    from nt_ops import mlu_dispatch
 
-    return activation.silu_and_mul_forward
+    return mlu_dispatch.build_mlu_active_wrapper(original)
 
 
 def _activation_fatrelu_builder(original: object) -> object:
@@ -141,15 +141,15 @@ _PROFILES: dict[str, tuple[CapabilityProfile, tuple[PatchSpec, ...]]] = {
                 builder=_rms_forward_oot_builder,
             ),
             # Patch forward_oot (not forward): CustomOp.forward dispatches
-            # via self._forward_method which is bound to self.forward_oot on
-            # out-of-tree platforms.  Replacing forward_oot at the class
-            # level before model instantiation ensures _forward_method points
-            # to our implementation.
+            # via self._forward_method on community backends, but vllm_mlu's
+            # FeedForward path bypasses SiluAndMul.forward_oot entirely and
+            # dispatches through vllm_mlu._mlu_ops.active(...). Intercept
+            # that MLU dispatcher instead, and only replace the silu + gated
+            # branch used by Qwen3 dense MLPs.
             PatchSpec(
                 patch_id="silu_and_mul",
-                module_path="vllm.model_executor.layers.activation",
-                object_name="SiluAndMul",
-                attr_name="forward_oot",
+                module_path="vllm_mlu._mlu_ops",
+                attr_name="active",
                 builder=_activation_silu_builder,
             ),
             # NOTE: rope patch omitted — RotaryEmbedding.forward_oot is never
