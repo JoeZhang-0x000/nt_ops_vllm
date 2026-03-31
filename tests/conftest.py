@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import sys
 from types import ModuleType
 from pathlib import Path
@@ -12,7 +13,10 @@ def _append_path(path: Path) -> None:
 
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[1]
+_append_path(REPO_ROOT)
 _append_path(WORKSPACE_ROOT / "vllm")
+_append_path(WORKSPACE_ROOT / "vllm-mlu")
 _append_path(WORKSPACE_ROOT / "ninetoothed")
 
 
@@ -21,8 +25,9 @@ def _ensure_vllm_logger_stub() -> None:
         return
 
     try:
-        import torch  # noqa: F401
-        import vllm.logger  # noqa: F401
+        importlib.import_module("torch")
+        importlib.import_module("vllm.logger")
+
         return
     except Exception:
         pass
@@ -44,8 +49,8 @@ def _ensure_vllm_logger_stub() -> None:
         del name
         return _StubLogger()
 
-    logger_module.init_logger = init_logger
-    vllm_module.logger = logger_module
+    logger_module.__dict__["init_logger"] = init_logger
+    vllm_module.__dict__["logger"] = logger_module
     sys.modules.setdefault("vllm", vllm_module)
     sys.modules["vllm.logger"] = logger_module
 

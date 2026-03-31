@@ -10,6 +10,8 @@
 
 This project aims to replace the default operators in [vLLM](https://github.com/vllm-project/vllm) with high-performance operators from [Ninetoothed](https://github.com/InfiniTensor/ninetoothed). By integrating Ninetoothed, we strive to enhance the inference efficiency and flexibility of vLLM.
 
+For Cambricon MLU, `nt_ops` now registers a vLLM platform plugin and an nt-ops-aware MLU worker path. The primary integration path is normal vLLM MLU selection, not manual `worker_cls="nt_ops.worker.NTVLLMWorker"` injection.
+
 ## Quick Start
 
 Follow the steps below to set up the environment and run the example.
@@ -35,8 +37,18 @@ cd vllm
 pip install -e .
 ```
 
+### 3. Install vLLM-MLU
 
-### 3. Install NT Ops for vLLM
+Install the MLU backend that provides the underlying MLU platform/runtime:
+
+```bash
+git clone https://github.com/Cambricon/vllm-mlu
+cd vllm-mlu
+pip install -e .
+```
+
+
+### 4. Install NT Ops for vLLM
 
 Now, clone and install this library:
 
@@ -53,13 +65,15 @@ pip install -e .
 > ```
 
 
-### 4. Run Example
+### 5. Run Example
 
 Finally, run the example to verify the installation:
 
 ```bash
-VLLM_ATTENTION_BACKEND=TRITON_ATTN python examples/basic.py
+VLLM_ATTENTION_BACKEND=TRITON_ATTN python examples/basic.py --model /path/to/model
 ```
+
+The example no longer passes a custom `worker_cls`. Once `vllm-mlu` and `nt_ops` are installed, the MLU path is selected through the normal vLLM platform/device flow.
 
 ## Debugging
 
@@ -70,3 +84,5 @@ To facilitate debugging and verification, we provide highlighted INFO logs. Afte
 (EngineCore_DP0 pid=3127755) [2025-12-10 15:54:29] INFO activation.py:67: NT SILU AND MUL is enabled.
 ```
 If you see these logs, it indicates that the Ninetoothed operators have been successfully enabled and are replacing the default vLLM operators.
+
+When debugging fused MLU backends, treat `status=installed` and `exercised=[...]` as different signals: a patch can install successfully but still remain unexercised on a backend that fuses the operator internally.

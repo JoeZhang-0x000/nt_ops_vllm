@@ -8,5 +8,7 @@ Supported devices include:
 - [ ] **MetaX GPU** (MACA) | 沐曦
 - [ ] **Hygon DCU** (ROCm) ｜ 海光
 - [ ] **Huawei Ascend NPU** (CANN) | 华为昇腾
-- [ ] **Cambricon MLU** (CNES) | 寒武纪
+- [x] **Cambricon MLU** (CNES) | 寒武纪
 - [ ] **Kunlun XPU** (XTDK) | 昆仑芯
+
+Current architectural focus is Cambricon MLU: the repo now models MLU as a first-class vLLM platform/worker path, while broader cross-device generalization remains intentionally deferred.

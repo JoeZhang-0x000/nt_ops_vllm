@@ -1,74 +1,50 @@
 from __future__ import annotations
 
 import importlib
+import logging
 import os
+import warnings
 
-from vllm.logger import init_logger
-from vllm.platforms import current_platform
+from nt_ops.runtime import REQUIRED_PROCESS_SCOPE, install
 
-from nt_ops.runtime import REQUIRED_PROCESS_SCOPE, get_capability_report, install
-
-logger = init_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _BASE_WORKER_ENV_VAR = "NT_OPS_VLLM_BASE_WORKER_CLS"
-_DEFAULT_BASE_WORKER_CANDIDATES = (
-    "vllm_mlu.v1.worker.gpu_worker.MLUWorker",
-    "vllm_mlu.worker.worker.MLUWorker",
-    "vllm_mlu.v1.worker.worker.MLUWorker",
-    "vllm_mlu.worker.mlu_worker.MLUWorker",
-    "vllm_mlu.v1.worker.mlu_worker.MLUWorker",
-)
-
-
-def _resolve_obj_by_qualname(qualname: str) -> object:
-    module_name, _, attr_path = qualname.partition(":")
-    if not attr_path:
-        module_name, _, attr_path = qualname.rpartition(".")
-    if not module_name or not attr_path:
-        raise ValueError(f"Invalid qualified name: {qualname!r}")
-
-    obj = importlib.import_module(module_name)
-    for attr in attr_path.split("."):
-        obj = getattr(obj, attr)
-    return obj
 
 
 def _resolve_base_worker_cls() -> type:
-    candidates: list[str] = []
+    envs = importlib.import_module("vllm.envs")
+    current_platform = importlib.import_module("vllm.platforms").current_platform
+    mlu_workers = importlib.import_module("nt_ops.workers.mlu")
+
     override = os.environ.get(_BASE_WORKER_ENV_VAR)
-    platform_device_type = getattr(current_platform, "device_type", "unknown")
     if override:
-        candidates.append(override)
-    candidates.extend(_DEFAULT_BASE_WORKER_CANDIDATES)
-    if getattr(current_platform, "is_cuda_alike", lambda: False)():
-        candidates.append("vllm.v1.worker.gpu_worker.Worker")
+        logger.info(
+            "Resolved nt_ops compatibility worker class from override: %s", override
+        )
+        return mlu_workers._resolve_worker_cls(override)
 
-    errors: list[str] = []
-    for qualname in candidates:
-        try:
-            obj = _resolve_obj_by_qualname(qualname)
-        except Exception as exc:
-            errors.append(f"{qualname}: {exc}")
-            continue
+    device_type = getattr(current_platform, "device_type", "unknown")
+    if device_type != "mlu":
+        raise ImportError(
+            "nt_ops.worker.NTVLLMWorker is only supported for MLU compatibility mode. "
+            f"Detected platform device_type={device_type!r}."
+        )
 
-        if isinstance(obj, type):
-            logger.info("Resolved nt_ops base worker class: %s", qualname)
-            return obj
-
-        errors.append(f"{qualname}: resolved object is not a class")
-
-    raise ImportError(
-        "Unable to resolve a base vLLM worker class for nt_ops. "
-        f"Detected platform device_type={platform_device_type!r}. "
-        f"Set {_BASE_WORKER_ENV_VAR} to the fully qualified worker class path. "
-        f"Attempts: {'; '.join(errors)}"
+    return (
+        mlu_workers.NTOpsMLUV1Worker
+        if envs.VLLM_USE_V1
+        else mlu_workers.NTOpsMLUV0Worker
     )
 
 
-class NTVLLMWorker(_resolve_base_worker_cls()):
-    def __init__(self, *args, **kwargs):
+class NTVLLMWorker:
+    def __new__(cls, *args, **kwargs):
+        warnings.warn(
+            "nt_ops.worker.NTVLLMWorker is deprecated; prefer MLU platform/device "
+            "selection instead of manual worker_cls injection.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         install(process_scope=REQUIRED_PROCESS_SCOPE)
-        super().__init__(*args, **kwargs)
-
-    def get_nt_ops_report(self) -> dict[str, object]:
-        return get_capability_report()
+        return _resolve_base_worker_cls()(*args, **kwargs)

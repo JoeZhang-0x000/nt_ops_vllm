@@ -53,3 +53,4 @@ def test_capability_report_tracks_hits(monkeypatch):
     assert report["fallback"] == ["embedding"]
     assert report["disabled"] == ["attention"]
     assert report["hits"]["rms_norm"] == 1
+    assert report["exercised"] == ["rms_norm"]

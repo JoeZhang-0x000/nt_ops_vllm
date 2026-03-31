@@ -33,18 +33,23 @@ def build_capability_report(
     status: str,
     errors: tuple[str, ...] = (),
 ) -> dict[str, object]:
+    hits = snapshot_hits()
     return {
         "profile": profile.name,
         "status": status,
         "enabled": list(profile.enabled),
         "fallback": list(profile.fallback),
         "disabled": list(profile.disabled),
-        "hits": snapshot_hits(),
+        "hits": hits,
+        "exercised": sorted(hits),
         "errors": list(errors),
     }
 
 
-def get_capability_report(profile: CapabilityProfile | None = None) -> dict[str, object]:
+def get_capability_report(
+    profile: CapabilityProfile | None = None,
+) -> dict[str, object]:
     if profile is None:
-        return {"hits": snapshot_hits()}
+        hits = snapshot_hits()
+        return {"hits": hits, "exercised": sorted(hits)}
     return build_capability_report(profile, status="unknown")

@@ -6,7 +6,6 @@ import json
 
 from vllm import LLM, SamplingParams
 import nt_ops
-_NT_OPS_WORKER_CLS = "nt_ops.worker.NTVLLMWorker"
 
 PROMPTS = [
     "Hello, my name is",
@@ -17,22 +16,27 @@ PROMPTS = [
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Basic nt_ops + vLLM generation example")
+    parser = argparse.ArgumentParser(
+        description="Basic nt_ops + vLLM generation example"
+    )
     parser.add_argument("--model", required=True, help="Path or HF repo of the model")
     parser.add_argument("--max-tokens", type=int, default=100)
     parser.add_argument("--temperature", type=float, default=0.8)
     parser.add_argument("--top-p", type=float, default=0.95)
-    parser.add_argument("--enforce-eager", action="store_true", default=True)
+    parser.add_argument("--enforce-eager", dest="enforce_eager", action="store_true")
+    parser.add_argument(
+        "--no-enforce-eager", dest="enforce_eager", action="store_false"
+    )
+    parser.set_defaults(enforce_eager=True)
     args = parser.parse_args()
 
-    sampling_params = SamplingParams(
+    sampling_params = SamplingParams.from_optional(
         temperature=args.temperature,
         top_p=args.top_p,
         max_tokens=args.max_tokens,
     )
 
-    llm = LLM(model=args.model, enforce_eager=args.enforce_eager,
-              worker_cls=_NT_OPS_WORKER_CLS)
+    llm = LLM(model=args.model, enforce_eager=args.enforce_eager)
     outputs = llm.generate(PROMPTS, sampling_params)
 
     print("\nGenerated Outputs:\n" + "-" * 60)
@@ -50,7 +54,9 @@ def main():
         print("-" * 60)
     except Exception as exc:
         print(f"\n[nt_ops] Could not retrieve report: {exc}")
-        print(f"[nt_ops] llm_engine attrs: {[a for a in dir(llm.llm_engine) if not a.startswith('_')]}")
+        print(
+            f"[nt_ops] llm_engine attrs: {[a for a in dir(llm.llm_engine) if not a.startswith('_')]}"
+        )
 
 
 if __name__ == "__main__":

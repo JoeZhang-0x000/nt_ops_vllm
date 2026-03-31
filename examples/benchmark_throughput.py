@@ -18,7 +18,6 @@ from typing import List, Tuple
 
 from vllm import LLM, SamplingParams
 import nt_ops
-_NT_OPS_WORKER_CLS = "nt_ops.worker.NTVLLMWorker"
 
 
 def build_prompts(input_len: int, batch_size: int) -> List[str]:
@@ -52,12 +51,8 @@ def benchmark(
         outputs = llm.generate(prompts, sampling_params)
         elapsed = time.perf_counter() - t0
 
-        total_output_tokens = sum(
-            len(o.outputs[0].token_ids) for o in outputs
-        )
-        total_input_tokens = sum(
-            len(o.prompt_token_ids) for o in outputs
-        )
+        total_output_tokens = sum(len(o.outputs[0].token_ids) for o in outputs)
+        total_input_tokens = sum(len(o.prompt_token_ids or []) for o in outputs)
         total_tokens = total_input_tokens + total_output_tokens
 
         throughputs.append(total_tokens / elapsed)
@@ -75,22 +70,53 @@ def benchmark(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="vLLM throughput benchmark with nt_ops")
+    parser = argparse.ArgumentParser(
+        description="vLLM throughput benchmark with nt_ops"
+    )
     parser.add_argument("--model", required=True, help="Path or HF repo of the model")
-    parser.add_argument("--input-len", type=int, default=64,
-                        help="Approximate number of input tokens per prompt (default: 64)")
-    parser.add_argument("--output-len", type=int, default=128,
-                        help="Number of output tokens to generate (default: 128)")
-    parser.add_argument("--batch-size", type=int, default=16,
-                        help="Number of prompts per batch (default: 16)")
-    parser.add_argument("--num-iters", type=int, default=3,
-                        help="Number of timed iterations (default: 3)")
-    parser.add_argument("--enforce-eager", action="store_true", default=True,
-                        help="Disable CUDA graph capture (default: True)")
-    parser.add_argument("--temperature", type=float, default=0.0,
-                        help="Sampling temperature; 0 = greedy (default: 0)")
-    parser.add_argument("--no-nt-ops", action="store_true",
-                        help="Skip nt_ops.install() for baseline comparison")
+    parser.add_argument(
+        "--input-len",
+        type=int,
+        default=64,
+        help="Approximate number of input tokens per prompt (default: 64)",
+    )
+    parser.add_argument(
+        "--output-len",
+        type=int,
+        default=128,
+        help="Number of output tokens to generate (default: 128)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=16,
+        help="Number of prompts per batch (default: 16)",
+    )
+    parser.add_argument(
+        "--num-iters",
+        type=int,
+        default=3,
+        help="Number of timed iterations (default: 3)",
+    )
+    parser.add_argument(
+        "--enforce-eager",
+        dest="enforce_eager",
+        action="store_true",
+        help="Disable CUDA graph capture (default: True)",
+    )
+    parser.add_argument(
+        "--no-enforce-eager",
+        dest="enforce_eager",
+        action="store_false",
+        help="Allow graph capture when the backend supports it",
+    )
+    parser.set_defaults(enforce_eager=True)
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.0,
+        help="Sampling temperature; 0 = greedy (default: 0)",
+    )
     args = parser.parse_args()
 
     print("=" * 60)
@@ -101,22 +127,15 @@ def main() -> None:
     print(f"  output_len  : {args.output_len} tokens")
     print(f"  batch_size  : {args.batch_size}")
     print(f"  num_iters   : {args.num_iters}")
-    print(f"  nt_ops      : {'disabled' if args.no_nt_ops else 'enabled'}")
+    print("  nt_ops      : enabled via MLU platform plugin")
     print("=" * 60)
 
-    sampling_params = SamplingParams(
+    sampling_params = SamplingParams.from_optional(
         temperature=args.temperature,
         max_tokens=args.output_len,
     )
 
-    # NTVLLMWorker calls nt_ops.install() inside the worker process (before model init).
-    # This is required because vLLM uses spawn multiprocessing — patches applied in the
-    # main process are not visible in worker processes.
-    llm = LLM(model=args.model, enforce_eager=args.enforce_eager,
-              **({"worker_cls": _NT_OPS_WORKER_CLS} if not args.no_nt_ops else {}))
-
-    if args.no_nt_ops:
-        print("nt_ops skipped (baseline mode)")
+    llm = LLM(model=args.model, enforce_eager=args.enforce_eager)
 
     prompts = build_prompts(args.input_len, args.batch_size)
 
@@ -132,12 +151,12 @@ def main() -> None:
     print(f"  Mean latency    : {mean_lat:.3f} s/batch")
     print(f"  Throughput/req  : {mean_tp / args.batch_size:.1f} tokens/s/req")
 
-    if not args.no_nt_ops:
-        report = nt_ops.get_vllm_capability_report(llm)
-        print(f"\nnt_ops capability report:")
-        print(f"  profile : {report.get('profile')}")
-        print(f"  status  : {report.get('status')}")
-        print(f"  hits    : {report.get('hits')}")
+    report = nt_ops.get_vllm_capability_report(llm)
+    print(f"\nnt_ops capability report:")
+    print(f"  profile   : {report.get('profile')}")
+    print(f"  status    : {report.get('status')}")
+    print(f"  exercised : {report.get('exercised')}")
+    print(f"  hits      : {report.get('hits')}")
 
     print("=" * 60)
 

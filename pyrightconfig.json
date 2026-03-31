@@ -1,0 +1,12 @@
+{
+  "include": [
+    "nt_ops",
+    "tests"
+  ],
+  "extraPaths": [
+    ".",
+    "../vllm",
+    "../vllm-mlu",
+    "../ninetoothed"
+  ]
+}
