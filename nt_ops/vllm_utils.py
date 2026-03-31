@@ -33,16 +33,39 @@ def _coerce_report(report_or_reports: object) -> dict[str, object]:
     return report_or_reports
 
 
+def _is_missing_method_error(exc: Exception, method: str) -> bool:
+    message = str(exc)
+    return method in message and "not implemented" in message.lower()
+
+
 def get_vllm_capability_report(llm_or_engine: object) -> dict[str, object]:
     for engine in _iter_engine_candidates(llm_or_engine):
         collective_rpc = getattr(engine, "collective_rpc", None)
         if callable(collective_rpc):
-            return _coerce_report(collective_rpc("get_nt_ops_report"))
+            try:
+                return _coerce_report(collective_rpc("get_nt_ops_report"))
+            except Exception as exc:
+                if not _is_missing_method_error(exc, "get_nt_ops_report"):
+                    raise
 
         model_executor = getattr(engine, "model_executor", None)
         execute_method = getattr(model_executor, "execute_method", None)
         if callable(execute_method):
-            return _coerce_report(execute_method("get_nt_ops_report"))
+            try:
+                return _coerce_report(execute_method("get_nt_ops_report"))
+            except Exception as exc:
+                if not _is_missing_method_error(exc, "get_nt_ops_report"):
+                    raise
+
+        driver_worker = getattr(model_executor, "driver_worker", None)
+        report_method = getattr(driver_worker, "get_nt_ops_report", None)
+        if callable(report_method):
+            return _coerce_report(report_method())
+
+        worker = getattr(driver_worker, "worker", None)
+        report_method = getattr(worker, "get_nt_ops_report", None)
+        if callable(report_method):
+            return _coerce_report(report_method())
 
     raise AttributeError(
         "Unable to retrieve nt_ops report from the provided vLLM object. "

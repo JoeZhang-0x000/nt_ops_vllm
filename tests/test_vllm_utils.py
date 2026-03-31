@@ -54,3 +54,27 @@ def test_get_vllm_capability_report_rejects_empty_reports():
 
     with pytest.raises(RuntimeError):
         nt_ops.get_vllm_capability_report(SimpleNamespace(llm_engine=Engine()))
+
+
+def test_get_vllm_capability_report_falls_back_when_collective_rpc_rejects_method():
+    expected = {"status": "installed", "hits": {"rms_norm": 1}}
+
+    class DriverWorker:
+        def get_nt_ops_report(self):
+            return expected
+
+    class ModelExecutor:
+        driver_worker = DriverWorker()
+
+    class Engine:
+        model_executor = ModelExecutor()
+
+        def collective_rpc(self, method: str):
+            assert method == "get_nt_ops_report"
+            raise RuntimeError(
+                "Call to collective_rpc method failed: Method 'get_nt_ops_report' is not implemented."
+            )
+
+    llm = SimpleNamespace(llm_engine=Engine())
+
+    assert nt_ops.get_vllm_capability_report(llm) == expected
