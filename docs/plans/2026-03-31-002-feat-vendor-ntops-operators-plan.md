@@ -1,7 +1,7 @@
 ---
 title: "feat: Vendor ntops operators into nt_ops_vllm"
 type: feat
-status: active
+status: completed
 date: 2026-03-31
 ---
 

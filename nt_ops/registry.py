@@ -31,6 +31,60 @@ def _activation_silu_builder(original: object) -> object:
     return activation.silu_and_mul_forward
 
 
+def _activation_fatrelu_builder(original: object) -> object:
+    from nt_ops import activation
+
+    return activation.fatrelu_and_mul_forward
+
+
+def _activation_mul_and_silu_builder(original: object) -> object:
+    from nt_ops import activation
+
+    return activation.mul_and_silu_forward
+
+
+def _activation_gelu_and_mul_builder(original: object) -> object:
+    from nt_ops import activation
+
+    return activation.gelu_and_mul_forward
+
+
+def _activation_swigluoai_and_mul_builder(original: object) -> object:
+    from nt_ops import activation
+
+    return activation.swigluoai_and_mul_forward
+
+
+def _activation_gelu_new_builder(original: object) -> object:
+    from nt_ops import activation
+
+    return activation.gelu_new_forward
+
+
+def _activation_gelu_fast_builder(original: object) -> object:
+    from nt_ops import activation
+
+    return activation.gelu_fast_forward
+
+
+def _activation_quick_gelu_builder(original: object) -> object:
+    from nt_ops import activation
+
+    return activation.quick_gelu_forward
+
+
+def _activation_relu2_builder(original: object) -> object:
+    from nt_ops import activation
+
+    return activation.relu2_forward
+
+
+def _activation_xielu_builder(original: object) -> object:
+    from nt_ops import activation
+
+    return activation.xielu_forward
+
+
 def _rope_forward_oot_builder(original: object) -> object:
     from nt_ops import rope
 
@@ -39,7 +93,12 @@ def _rope_forward_oot_builder(original: object) -> object:
 
 QWEN3_MINIMAL_DENSE_PROFILE = CapabilityProfile(
     name="qwen3_minimal_dense",
-    enabled=("rms_norm", "fused_add_rms_norm", "silu_and_mul"),
+    enabled=(
+        "rms_norm", "fused_add_rms_norm",
+        "silu_and_mul", "fatrelu_and_mul", "mul_and_silu", "gelu_and_mul",
+        "swigluoai_and_mul", "gelu_new", "gelu_fast", "quick_gelu",
+        "relu2", "xielu",
+    ),
     # rope: RotaryEmbedding.forward_oot is never called on MLU — the MLU
     # FlashAttentionBackend applies RoPE internally as a fused op.  Patching
     # forward_oot has no effect; leave rope in fallback until a viable
@@ -76,6 +135,69 @@ _PROFILES: dict[str, tuple[CapabilityProfile, tuple[PatchSpec, ...]]] = {
                 object_name="SiluAndMul",
                 attr_name="forward_oot",
                 builder=_activation_silu_builder,
+            ),
+            PatchSpec(
+                patch_id="fatrelu_and_mul",
+                module_path="vllm.model_executor.layers.activation",
+                object_name="FatreluAndMul",
+                attr_name="forward_oot",
+                builder=_activation_fatrelu_builder,
+            ),
+            PatchSpec(
+                patch_id="mul_and_silu",
+                module_path="vllm.model_executor.layers.activation",
+                object_name="MulAndSilu",
+                attr_name="forward_oot",
+                builder=_activation_mul_and_silu_builder,
+            ),
+            PatchSpec(
+                patch_id="gelu_and_mul",
+                module_path="vllm.model_executor.layers.activation",
+                object_name="GeluAndMul",
+                attr_name="forward_oot",
+                builder=_activation_gelu_and_mul_builder,
+            ),
+            PatchSpec(
+                patch_id="swigluoai_and_mul",
+                module_path="vllm.model_executor.layers.activation",
+                object_name="SwigluOAIAndMul",
+                attr_name="forward_oot",
+                builder=_activation_swigluoai_and_mul_builder,
+            ),
+            PatchSpec(
+                patch_id="gelu_new",
+                module_path="vllm.model_executor.layers.activation",
+                object_name="NewGELU",
+                attr_name="forward_oot",
+                builder=_activation_gelu_new_builder,
+            ),
+            PatchSpec(
+                patch_id="gelu_fast",
+                module_path="vllm.model_executor.layers.activation",
+                object_name="FastGELU",
+                attr_name="forward_oot",
+                builder=_activation_gelu_fast_builder,
+            ),
+            PatchSpec(
+                patch_id="quick_gelu",
+                module_path="vllm.model_executor.layers.activation",
+                object_name="QuickGELU",
+                attr_name="forward_oot",
+                builder=_activation_quick_gelu_builder,
+            ),
+            PatchSpec(
+                patch_id="relu2",
+                module_path="vllm.model_executor.layers.activation",
+                object_name="ReLUSquaredActivation",
+                attr_name="forward_oot",
+                builder=_activation_relu2_builder,
+            ),
+            PatchSpec(
+                patch_id="xielu",
+                module_path="vllm.model_executor.layers.activation",
+                object_name="XIELU",
+                attr_name="forward_oot",
+                builder=_activation_xielu_builder,
             ),
             # NOTE: rope patch omitted — RotaryEmbedding.forward_oot is never
             # called on MLU because FlashAttentionBackend fuses RoPE into the
