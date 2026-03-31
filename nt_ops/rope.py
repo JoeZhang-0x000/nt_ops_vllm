@@ -5,6 +5,7 @@ import torch
 from vllm.logger import init_logger
 
 from nt_ops.capabilities import record_hit
+from nt_ops.debug import trace
 from nt_ops.kernels.rope import rotary_position_embedding as _rope_kernel
 
 logger = init_logger(__name__)
@@ -59,6 +60,7 @@ def build_rotary_forward_oot(original_forward_oot):
             return original_forward_oot(self, positions, query, key)
 
         logger.info_once("\033[32mNT RoPE is enabled.\033[0m")
+        trace("rope", shape=tuple(query.shape), dtype=query.dtype)
         record_hit("rope")
 
         positions = positions.flatten()

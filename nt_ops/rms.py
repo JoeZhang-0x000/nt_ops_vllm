@@ -8,6 +8,7 @@ from vllm.logger import init_logger
 from typing import Tuple
 
 from nt_ops.capabilities import record_hit
+from nt_ops.debug import trace
 
 logger = init_logger(__name__)
 
@@ -345,6 +346,7 @@ def rms_norm_helper(
     variance_epsilon: float,
 ) -> torch.Tensor:
     logger.info_once("\033[32mNT RMS is enabled.\033[0m")
+    trace("rms_norm", shape=tuple(x.shape), dtype=x.dtype)
     record_hit("rms_norm")
     return rms(input=x, weight=weight, residual=None, eps=variance_epsilon)
 
@@ -356,6 +358,7 @@ def fused_add_rms_norm_helper(
     variance_epsilon: float,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     logger.info_once("\033[32mNT RMS is enabled.\033[0m")
+    trace("fused_add_rms_norm", shape=tuple(x.shape), dtype=x.dtype)
     record_hit("fused_add_rms_norm")
     # rms() with residual returns (output, updated_residual) as new tensors.
     # vLLM's forward_oot contract expects x and residual to be mutated in-place.
