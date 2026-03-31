@@ -133,7 +133,7 @@ def main() -> None:
     print(f"  Throughput/req  : {mean_tp / args.batch_size:.1f} tokens/s/req")
 
     if not args.no_nt_ops:
-        report = nt_ops.get_capability_report()
+        report = nt_ops.get_vllm_capability_report(llm)
         print(f"\nnt_ops capability report:")
         print(f"  profile : {report.get('profile')}")
         print(f"  status  : {report.get('status')}")

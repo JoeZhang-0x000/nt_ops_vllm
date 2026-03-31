@@ -134,6 +134,7 @@ direct_register_custom_op("nt_fatrelu_and_mul", fatreluAndMul, fake_impl=fake_fa
 def fatrelu_and_mul_forward(self, x: torch.Tensor) -> torch.Tensor:
     logger.info_once("\033[32mNT FATRELU AND MUL is enabled.\033[0m")
     trace("fatrelu_and_mul", shape=tuple(x.shape), dtype=x.dtype)
+    record_hit("fatrelu_and_mul")
     return torch.ops.vllm.nt_fatrelu_and_mul(x)
 
 
@@ -191,6 +192,7 @@ direct_register_custom_op("nt_mul_and_silu", mulAndSilu, fake_impl=fake_mulAndSi
 def mul_and_silu_forward(self, x: torch.Tensor) -> torch.Tensor:
     logger.info_once("\033[32mNT MUL AND SILU is enabled.\033[0m")
     trace("mul_and_silu", shape=tuple(x.shape), dtype=x.dtype)
+    record_hit("mul_and_silu")
     return torch.ops.vllm.nt_mul_and_silu(x)
 
 
@@ -261,6 +263,7 @@ direct_register_custom_op("nt_gelu_and_mul", geluAndMul, fake_impl=fake_geluAndM
 def gelu_and_mul_forward(self, x: torch.Tensor) -> torch.Tensor:
     logger.info_once("\033[32mNT GELU AND MUL is enabled.\033[0m")
     trace("gelu_and_mul", shape=tuple(x.shape), dtype=x.dtype)
+    record_hit("gelu_and_mul")
     return torch.ops.vllm.nt_gelu_and_mul(x)
 
 
@@ -328,6 +331,7 @@ direct_register_custom_op("nt_swigluoai_and_mul", swigluOAIAndMul, fake_impl=fak
 def swigluoai_and_mul_forward(self, x: torch.Tensor) -> torch.Tensor:
     logger.info_once("\033[32mNT SWIGLUOAI AND MUL is enabled.\033[0m")
     trace("swigluoai_and_mul", shape=tuple(x.shape), dtype=x.dtype)
+    record_hit("swigluoai_and_mul")
     return torch.ops.vllm.nt_swigluoai_and_mul(x)
 
 
@@ -386,6 +390,7 @@ direct_register_custom_op("nt_gelu_new", newGELU, fake_impl=fake_newGELU)
 def gelu_new_forward(self, x: torch.Tensor) -> torch.Tensor:
     logger.info_once("\033[32mNT NEW GELU is enabled.\033[0m")
     trace("gelu_new", shape=tuple(x.shape), dtype=x.dtype)
+    record_hit("gelu_new")
     return torch.ops.vllm.nt_gelu_new(x)
 
 
@@ -441,6 +446,7 @@ direct_register_custom_op("nt_gelu_fast", fastGELU, fake_impl=fake_fastGELU)
 def gelu_fast_forward(self, x: torch.Tensor) -> torch.Tensor:
     logger.info_once("\033[32mNT FAST GELU is enabled.\033[0m")
     trace("gelu_fast", shape=tuple(x.shape), dtype=x.dtype)
+    record_hit("gelu_fast")
     return torch.ops.vllm.nt_gelu_fast(x)
 
 
@@ -493,6 +499,7 @@ direct_register_custom_op("nt_quick_gelu", quickGELU, fake_impl=fake_quickGELU)
 def quick_gelu_forward(self, x: torch.Tensor) -> torch.Tensor:
     logger.info_once("\033[32mNT QUICK GELU is enabled.\033[0m")
     trace("quick_gelu", shape=tuple(x.shape), dtype=x.dtype)
+    record_hit("quick_gelu")
     return torch.ops.vllm.nt_quick_gelu(x)
 
 
@@ -548,6 +555,7 @@ direct_register_custom_op("nt_relu2", reLUSquaredActivation, fake_impl=fake_reLU
 def relu2_forward(self, x: torch.Tensor) -> torch.Tensor:
     logger.info_once("\033[32mNT RELUSQUARED ACTIVATION is enabled.\033[0m")
     trace("relu2", shape=tuple(x.shape), dtype=x.dtype)
+    record_hit("relu2")
     return torch.ops.vllm.nt_relu2(x)
 
 
@@ -636,4 +644,5 @@ direct_register_custom_op("nt_xielu", xIELU, fake_impl=fake_xIELU)
 def xielu_forward(self, x: torch.Tensor) -> torch.Tensor:
     logger.info_once("\033[32mNT XIELU is enabled.\033[0m")
     trace("xielu", shape=tuple(x.shape), dtype=x.dtype)
+    record_hit("xielu")
     return torch.ops.vllm.nt_xielu(x)

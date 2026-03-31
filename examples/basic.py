@@ -44,13 +44,7 @@ def main():
         print("-" * 60)
 
     try:
-        engine = llm.llm_engine
-        # vLLM v1 wraps LLMEngine inside an inner engine attribute
-        if not hasattr(engine, "model_executor") and hasattr(engine, "engine"):
-            engine = engine.engine
-        executor = engine.model_executor
-        reports = executor.execute_method("get_nt_ops_report")
-        report = reports[0] if isinstance(reports, list) else reports
+        report = nt_ops.get_vllm_capability_report(llm)
         print("\nnt_ops capability report:\n" + "-" * 60)
         print(json.dumps(report, indent=2))
         print("-" * 60)

@@ -94,16 +94,32 @@ def _rope_forward_oot_builder(original: object) -> object:
 QWEN3_MINIMAL_DENSE_PROFILE = CapabilityProfile(
     name="qwen3_minimal_dense",
     enabled=(
-        "rms_norm", "fused_add_rms_norm",
-        "silu_and_mul", "fatrelu_and_mul", "mul_and_silu", "gelu_and_mul",
-        "swigluoai_and_mul", "gelu_new", "gelu_fast", "quick_gelu",
-        "relu2", "xielu",
+        "rms_norm",
+        "fused_add_rms_norm",
+        "silu_and_mul",
     ),
     # rope: RotaryEmbedding.forward_oot is never called on MLU — the MLU
     # FlashAttentionBackend applies RoPE internally as a fused op.  Patching
     # forward_oot has no effect; leave rope in fallback until a viable
     # hook point is identified inside the MLU attention backend.
-    fallback=("rope", "embedding", "logits_processor", "sampler"),
+    # Other activation kernels exist in nt_ops/activation.py, but Qwen3-0.6B
+    # advertises hidden_act="silu", so only SiluAndMul is part of the active
+    # Qwen3 minimal-dense path for this profile.
+    fallback=(
+        "rope",
+        "fatrelu_and_mul",
+        "mul_and_silu",
+        "gelu_and_mul",
+        "swigluoai_and_mul",
+        "gelu_new",
+        "gelu_fast",
+        "quick_gelu",
+        "relu2",
+        "xielu",
+        "embedding",
+        "logits_processor",
+        "sampler",
+    ),
     disabled=("linear", "attention", "lm_head", "flash_attn"),
 )
 
@@ -136,69 +152,6 @@ _PROFILES: dict[str, tuple[CapabilityProfile, tuple[PatchSpec, ...]]] = {
                 attr_name="forward_oot",
                 builder=_activation_silu_builder,
             ),
-            PatchSpec(
-                patch_id="fatrelu_and_mul",
-                module_path="vllm.model_executor.layers.activation",
-                object_name="FatreluAndMul",
-                attr_name="forward_oot",
-                builder=_activation_fatrelu_builder,
-            ),
-            PatchSpec(
-                patch_id="mul_and_silu",
-                module_path="vllm.model_executor.layers.activation",
-                object_name="MulAndSilu",
-                attr_name="forward_oot",
-                builder=_activation_mul_and_silu_builder,
-            ),
-            PatchSpec(
-                patch_id="gelu_and_mul",
-                module_path="vllm.model_executor.layers.activation",
-                object_name="GeluAndMul",
-                attr_name="forward_oot",
-                builder=_activation_gelu_and_mul_builder,
-            ),
-            PatchSpec(
-                patch_id="swigluoai_and_mul",
-                module_path="vllm.model_executor.layers.activation",
-                object_name="SwigluOAIAndMul",
-                attr_name="forward_oot",
-                builder=_activation_swigluoai_and_mul_builder,
-            ),
-            PatchSpec(
-                patch_id="gelu_new",
-                module_path="vllm.model_executor.layers.activation",
-                object_name="NewGELU",
-                attr_name="forward_oot",
-                builder=_activation_gelu_new_builder,
-            ),
-            PatchSpec(
-                patch_id="gelu_fast",
-                module_path="vllm.model_executor.layers.activation",
-                object_name="FastGELU",
-                attr_name="forward_oot",
-                builder=_activation_gelu_fast_builder,
-            ),
-            PatchSpec(
-                patch_id="quick_gelu",
-                module_path="vllm.model_executor.layers.activation",
-                object_name="QuickGELU",
-                attr_name="forward_oot",
-                builder=_activation_quick_gelu_builder,
-            ),
-            PatchSpec(
-                patch_id="relu2",
-                module_path="vllm.model_executor.layers.activation",
-                object_name="ReLUSquaredActivation",
-                attr_name="forward_oot",
-                builder=_activation_relu2_builder,
-            ),
-            PatchSpec(
-                patch_id="xielu",
-                module_path="vllm.model_executor.layers.activation",
-                object_name="XIELU",
-                attr_name="forward_oot",
-                builder=_activation_xielu_builder,
-            ),
             # NOTE: rope patch omitted — RotaryEmbedding.forward_oot is never
             # called on MLU because FlashAttentionBackend fuses RoPE into the
             # attention kernel.  _rope_forward_oot_builder is kept for when a
@@ -213,4 +166,3 @@ def get_profile(profile_name: str) -> tuple[CapabilityProfile, tuple[PatchSpec, 
         return _PROFILES[profile_name]
     except KeyError as exc:
         raise ValueError(f"Unknown nt_ops profile: {profile_name}") from exc
-
