@@ -39,8 +39,12 @@ def _rope_forward_oot_builder(original: object) -> object:
 
 QWEN3_MINIMAL_DENSE_PROFILE = CapabilityProfile(
     name="qwen3_minimal_dense",
-    enabled=("rms_norm", "fused_add_rms_norm", "silu_and_mul", "rope"),
-    fallback=("embedding", "logits_processor", "sampler"),
+    enabled=("rms_norm", "fused_add_rms_norm", "silu_and_mul"),
+    # rope: RotaryEmbedding.forward_oot is never called on MLU — the MLU
+    # FlashAttentionBackend applies RoPE internally as a fused op.  Patching
+    # forward_oot has no effect; leave rope in fallback until a viable
+    # hook point is identified inside the MLU attention backend.
+    fallback=("rope", "embedding", "logits_processor", "sampler"),
     disabled=("linear", "attention", "lm_head", "flash_attn"),
 )
 
@@ -73,15 +77,10 @@ _PROFILES: dict[str, tuple[CapabilityProfile, tuple[PatchSpec, ...]]] = {
                 attr_name="forward_oot",
                 builder=_activation_silu_builder,
             ),
-            # Same reasoning: patch forward_oot on RotaryEmbedding, and drop
-            # the is_cuda guard that always short-circuits on MLU tensors.
-            PatchSpec(
-                patch_id="rope",
-                module_path="vllm.model_executor.layers.rotary_embedding.base",
-                object_name="RotaryEmbedding",
-                attr_name="forward_oot",
-                builder=_rope_forward_oot_builder,
-            ),
+            # NOTE: rope patch omitted — RotaryEmbedding.forward_oot is never
+            # called on MLU because FlashAttentionBackend fuses RoPE into the
+            # attention kernel.  _rope_forward_oot_builder is kept for when a
+            # viable hook point inside the MLU attention backend is found.
         ),
     )
 }

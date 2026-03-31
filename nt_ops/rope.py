@@ -55,18 +55,7 @@ def build_rotary_forward_oot(original_forward_oot):
         query: torch.Tensor,
         key: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
-        logger.info_once(
-            "NT rope.forward_oot called: type=%s is_neox_style=%s rotary_dim=%s",
-            type(self).__name__,
-            getattr(self, "is_neox_style", "MISSING"),
-            getattr(self, "rotary_dim", "MISSING"),
-        )
         if not self.is_neox_style or self.rotary_dim % 2:
-            logger.info_once(
-                "NT rope guard triggered (fallback): is_neox_style=%s rotary_dim=%s",
-                self.is_neox_style,
-                self.rotary_dim,
-            )
             return original_forward_oot(self, positions, query, key)
 
         logger.info_once("\033[32mNT RoPE is enabled.\033[0m")
