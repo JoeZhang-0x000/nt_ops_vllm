@@ -70,10 +70,10 @@ pip install -e .
 Finally, run the example to verify the installation:
 
 ```bash
-VLLM_ATTENTION_BACKEND=TRITON_ATTN python examples/basic.py --model /path/to/model
+VLLM_PLUGINS=nt_ops_mlu,nt_ops_mlu_hijack VLLM_ATTENTION_BACKEND=TRITON_ATTN python examples/basic.py --model /path/to/model
 ```
 
-The example no longer passes a custom `worker_cls`. Once `vllm-mlu` and `nt_ops` are installed, the MLU path is selected through the normal vLLM platform/device flow.
+The example no longer passes a custom `worker_cls`. When selecting the nt-ops MLU platform plugin explicitly, include both `nt_ops_mlu` and `nt_ops_mlu_hijack` in `VLLM_PLUGINS`: the first activates the nt-ops-aware MLU worker path, and the second preserves the upstream `vllm-mlu` hijack/spawn behavior required for MLU startup.
 
 ## Debugging
 

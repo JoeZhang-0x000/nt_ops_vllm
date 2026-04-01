@@ -32,6 +32,17 @@ def test_register_nt_ops_mlu_platform_returns_platform_path():
     )
 
 
+def test_register_nt_ops_mlu_hijack_delegates_to_vllm_mlu(monkeypatch):
+    calls: list[str] = []
+
+    module = ModuleType("vllm_mlu")
+    module.__dict__["register_mlu_hijack"] = lambda: calls.append("called")
+    monkeypatch.setitem(sys.modules, "vllm_mlu", module)
+
+    assert nt_ops.register_nt_ops_mlu_hijack() is None
+    assert calls == ["called"]
+
+
 def test_platform_rewrites_vllm_mlu_worker_classes(monkeypatch):
     _install_vllm_mlu_platform_stub(monkeypatch)
     module = importlib.import_module("nt_ops.platforms.mlu")

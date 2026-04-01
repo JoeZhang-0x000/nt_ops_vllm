@@ -8,6 +8,9 @@ setup(
         "vllm.platform_plugins": [
             "nt_ops_mlu = nt_ops:register_nt_ops_mlu_platform",
         ],
+        "vllm.general_plugins": [
+            "nt_ops_mlu_hijack = nt_ops:register_nt_ops_mlu_hijack",
+        ],
     },
     python_requires=">=3.10",
     install_requires=[
