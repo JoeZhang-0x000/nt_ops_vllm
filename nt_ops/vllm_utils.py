@@ -11,7 +11,11 @@ def _iter_engine_candidates(llm_or_engine: object) -> Iterator[object]:
         if candidate is None:
             continue
 
-        for engine in (candidate, getattr(candidate, "engine", None)):
+        for engine in (
+            candidate,
+            getattr(candidate, "engine", None),
+            getattr(candidate, "engine_core", None),
+        ):
             if engine is None or id(engine) in seen:
                 continue
             seen.add(id(engine))
@@ -22,7 +26,15 @@ def _coerce_report(report_or_reports: object) -> dict[str, object]:
     if isinstance(report_or_reports, list):
         if not report_or_reports:
             raise RuntimeError("vLLM returned an empty nt_ops report list")
-        report_or_reports = report_or_reports[0]
+
+        first_report = _coerce_report(report_or_reports[0])
+        for report in report_or_reports[1:]:
+            current = _coerce_report(report)
+            if current != first_report:
+                raise RuntimeError(
+                    "vLLM returned inconsistent nt_ops reports across workers"
+                )
+        return first_report
 
     if not isinstance(report_or_reports, dict):
         raise TypeError(
@@ -49,6 +61,28 @@ def get_vllm_capability_report(llm_or_engine: object) -> dict[str, object]:
                     raise
 
         model_executor = getattr(engine, "model_executor", None)
+        execute_method = getattr(model_executor, "execute_method", None)
+        if callable(execute_method):
+            try:
+                return _coerce_report(execute_method("get_nt_ops_report"))
+            except Exception as exc:
+                if not _is_missing_method_error(exc, "get_nt_ops_report"):
+                    raise
+
+        driver_worker = getattr(model_executor, "driver_worker", None)
+        report_method = getattr(driver_worker, "get_nt_ops_report", None)
+        if callable(report_method):
+            return _coerce_report(report_method())
+
+        worker = getattr(driver_worker, "worker", None)
+        report_method = getattr(worker, "get_nt_ops_report", None)
+        if callable(report_method):
+            return _coerce_report(report_method())
+
+        if model_executor is None:
+            engine_core = getattr(engine, "engine_core", None)
+            model_executor = getattr(engine_core, "model_executor", None)
+
         execute_method = getattr(model_executor, "execute_method", None)
         if callable(execute_method):
             try:

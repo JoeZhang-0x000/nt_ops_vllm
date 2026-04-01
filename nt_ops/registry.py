@@ -166,3 +166,12 @@ def get_profile(profile_name: str) -> tuple[CapabilityProfile, tuple[PatchSpec, 
         return _PROFILES[profile_name]
     except KeyError as exc:
         raise ValueError(f"Unknown nt_ops profile: {profile_name}") from exc
+
+
+def get_phase1_operator_matrix(profile_name: str) -> dict[str, list[str]]:
+    profile, _ = get_profile(profile_name)
+    return {
+        "must_have_nt_ops": list(profile.enabled),
+        "backend_native_fallback": list(profile.fallback),
+        "out_of_scope": list(profile.disabled),
+    }

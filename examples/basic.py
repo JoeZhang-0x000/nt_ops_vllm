@@ -3,9 +3,13 @@
 
 import argparse
 import json
+import os
+from typing import TYPE_CHECKING
 
-from vllm import LLM, SamplingParams
 import nt_ops
+
+if TYPE_CHECKING:
+    from vllm import LLM, SamplingParams
 
 PROMPTS = [
     "Hello, my name is",
@@ -15,7 +19,7 @@ PROMPTS = [
 ]
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Basic nt_ops + vLLM generation example"
     )
@@ -29,6 +33,12 @@ def main():
     )
     parser.set_defaults(enforce_eager=True)
     args = parser.parse_args()
+
+    os.environ.setdefault(
+        "VLLM_WORKER_MULTIPROC_METHOD", nt_ops.PHASE1_MLU_MULTIPROC_METHOD
+    )
+
+    from vllm import LLM, SamplingParams
 
     sampling_params = SamplingParams.from_optional(
         temperature=args.temperature,

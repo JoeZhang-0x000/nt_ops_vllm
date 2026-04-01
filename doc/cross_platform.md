@@ -1,5 +1,5 @@
 ## Cross-Platform Support
-This project demonstrates the flexibility of **NT Ops** for vLLM. By leveraging Ninetoothed operators, we can seamlessly deploy vLLM across a wide range of hardware architectures, breaking the dependency on specific hardware backends.
+This project explores how **NT Ops** can be integrated into vLLM across hardware backends. Today the concrete, supported focus is the thin nt-ops-enabled MLU path; broader cross-device coverage remains exploratory rather than seamless.
 Supported devices include:
 - [ ] **CPU** (x86/ARM)
 - [x] **NVIDIA GPU** (CUDA)
@@ -11,4 +11,4 @@ Supported devices include:
 - [x] **Cambricon MLU** (CNES) | 寒武纪
 - [ ] **Kunlun XPU** (XTDK) | 昆仑芯
 
-Current architectural focus is Cambricon MLU: the repo now models MLU as a first-class vLLM platform/worker path, while broader cross-device generalization remains intentionally deferred.
+Current architectural focus is Cambricon MLU: the repo now models MLU as a thin nt-ops-enabled backend path on top of `vllm-mlu`, while broader cross-device generalization remains intentionally deferred.

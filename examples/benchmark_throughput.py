@@ -13,11 +13,14 @@ Usage:
 """
 
 import argparse
+import os
 import time
-from typing import List, Tuple
+from typing import TYPE_CHECKING, List, Tuple
 
-from vllm import LLM, SamplingParams
 import nt_ops
+
+if TYPE_CHECKING:
+    from vllm import LLM, SamplingParams
 
 
 def build_prompts(input_len: int, batch_size: int) -> List[str]:
@@ -29,15 +32,17 @@ def build_prompts(input_len: int, batch_size: int) -> List[str]:
     return [prompt] * batch_size
 
 
-def run_warmup(llm: LLM, prompts: List[str], sampling_params: SamplingParams) -> None:
+def run_warmup(
+    llm: "LLM", prompts: List[str], sampling_params: "SamplingParams"
+) -> None:
     print("Warming up...")
     llm.generate(prompts[:1], sampling_params)
 
 
 def benchmark(
-    llm: LLM,
+    llm: "LLM",
     prompts: List[str],
-    sampling_params: SamplingParams,
+    sampling_params: "SamplingParams",
     num_iters: int,
 ) -> Tuple[float, float]:
     """
@@ -128,7 +133,16 @@ def main() -> None:
     print(f"  batch_size  : {args.batch_size}")
     print(f"  num_iters   : {args.num_iters}")
     print("  nt_ops      : enabled via MLU platform plugin")
+    print(
+        f"  multiproc   : {os.environ.get('VLLM_WORKER_MULTIPROC_METHOD', nt_ops.PHASE1_MLU_MULTIPROC_METHOD)}"
+    )
     print("=" * 60)
+
+    os.environ.setdefault(
+        "VLLM_WORKER_MULTIPROC_METHOD", nt_ops.PHASE1_MLU_MULTIPROC_METHOD
+    )
+
+    from vllm import LLM, SamplingParams
 
     sampling_params = SamplingParams.from_optional(
         temperature=args.temperature,

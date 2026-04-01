@@ -54,3 +54,18 @@ def test_capability_report_tracks_hits(monkeypatch):
     assert report["disabled"] == ["attention"]
     assert report["hits"]["rms_norm"] == 1
     assert report["exercised"] == ["rms_norm"]
+
+
+def test_capability_report_without_profile_only_exposes_runtime_hits():
+    from nt_ops.capabilities import (
+        get_capability_report as get_capabilities_report,
+        record_hit,
+        reset_hits,
+    )
+
+    reset_hits()
+    record_hit("silu_and_mul")
+
+    report = get_capabilities_report()
+
+    assert report == {"hits": {"silu_and_mul": 1}, "exercised": ["silu_and_mul"]}

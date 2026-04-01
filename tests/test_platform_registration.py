@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 from types import ModuleType, SimpleNamespace
 
@@ -32,6 +33,10 @@ def test_register_nt_ops_mlu_platform_returns_platform_path():
     )
 
 
+def test_get_phase1_mlu_plugins_lists_coupled_plugins():
+    assert nt_ops.get_phase1_mlu_plugins() == ("nt_ops_mlu", "nt_ops_mlu_hijack")
+
+
 def test_register_nt_ops_mlu_hijack_delegates_to_vllm_mlu(monkeypatch):
     calls: list[str] = []
 
@@ -39,8 +44,13 @@ def test_register_nt_ops_mlu_hijack_delegates_to_vllm_mlu(monkeypatch):
     module.__dict__["register_mlu_hijack"] = lambda: calls.append("called")
     monkeypatch.setitem(sys.modules, "vllm_mlu", module)
 
+    monkeypatch.delenv("VLLM_WORKER_MULTIPROC_METHOD", raising=False)
+
     assert nt_ops.register_nt_ops_mlu_hijack() is None
     assert calls == ["called"]
+    assert (
+        os.environ["VLLM_WORKER_MULTIPROC_METHOD"] == nt_ops.PHASE1_MLU_MULTIPROC_METHOD
+    )
 
 
 def test_platform_rewrites_vllm_mlu_worker_classes(monkeypatch):

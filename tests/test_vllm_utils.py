@@ -20,6 +20,18 @@ def test_get_vllm_capability_report_uses_collective_rpc():
     assert nt_ops.get_vllm_capability_report(llm) == expected
 
 
+def test_get_vllm_capability_report_rejects_inconsistent_report_lists():
+    class Engine:
+        def collective_rpc(self, method: str):
+            assert method == "get_nt_ops_report"
+            return [{"status": "installed"}, {"status": "failed"}]
+
+    llm = SimpleNamespace(llm_engine=Engine())
+
+    with pytest.raises(RuntimeError, match="inconsistent nt_ops reports"):
+        nt_ops.get_vllm_capability_report(llm)
+
+
 def test_get_vllm_capability_report_falls_back_to_model_executor():
     expected = {"status": "installed", "hits": {"rms_norm": 1}}
 
@@ -76,5 +88,23 @@ def test_get_vllm_capability_report_falls_back_when_collective_rpc_rejects_metho
             )
 
     llm = SimpleNamespace(llm_engine=Engine())
+
+    assert nt_ops.get_vllm_capability_report(llm) == expected
+
+
+def test_get_vllm_capability_report_checks_engine_core_model_executor():
+    expected = {"status": "installed", "hits": {"rms_norm": 1}}
+
+    class DriverWorker:
+        def get_nt_ops_report(self):
+            return expected
+
+    class ModelExecutor:
+        driver_worker = DriverWorker()
+
+    class EngineCore:
+        model_executor = ModelExecutor()
+
+    llm = SimpleNamespace(llm_engine=SimpleNamespace(engine_core=EngineCore()))
 
     assert nt_ops.get_vllm_capability_report(llm) == expected
