@@ -132,7 +132,7 @@ def main() -> None:
     print(f"  output_len  : {args.output_len} tokens")
     print(f"  batch_size  : {args.batch_size}")
     print(f"  num_iters   : {args.num_iters}")
-    print("  nt_ops      : enabled via MLU platform plugin")
+    print("  nt_ops      : enabled via MLU plugin stack")
     print(
         f"  multiproc   : {os.environ.get('VLLM_WORKER_MULTIPROC_METHOD', nt_ops.PHASE1_MLU_MULTIPROC_METHOD)}"
     )

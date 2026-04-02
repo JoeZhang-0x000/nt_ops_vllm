@@ -21,13 +21,13 @@ def test_examples_do_not_depend_on_manual_nt_ops_worker_override():
 def test_readme_documents_phase1_plugin_and_spawn_contract():
     readme = (REPO_ROOT / "README.md").read_text()
 
-    assert "nt_ops_mlu,nt_ops_mlu_hijack" in readme
+    assert "VLLM_PLUGINS=mlu,nt_ops_mlu" in readme
     assert "VLLM_WORKER_MULTIPROC_METHOD=spawn" in readme
     assert "required part of the runtime stack" in readme
 
 
-def test_setup_exports_both_phase1_plugin_entrypoints():
+def test_setup_exports_nt_ops_general_plugin_entrypoint():
     setup_py = (REPO_ROOT / "setup.py").read_text()
 
-    for plugin_name in nt_ops.get_phase1_mlu_plugins():
-        assert plugin_name in setup_py
+    assert "nt_ops_mlu = nt_ops:register_nt_ops_mlu_plugin" in setup_py
+    assert "vllm.platform_plugins" not in setup_py

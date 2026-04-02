@@ -10,7 +10,7 @@
 
 This project aims to replace the default operators in [vLLM](https://github.com/vllm-project/vllm) with high-performance operators from [Ninetoothed](https://github.com/InfiniTensor/ninetoothed). By integrating Ninetoothed, we strive to enhance the inference efficiency and flexibility of vLLM.
 
-For Cambricon MLU, `nt_ops` now registers a vLLM platform plugin and an nt-ops-aware MLU worker path. The phase-1 backend story is intentionally thin: `vllm-mlu` still owns MLU platform/runtime bring-up, while `nt_ops_vllm` owns plugin activation, worker-time nt-ops attachment, capability reporting, and a small operator matrix. The primary integration path is normal vLLM MLU selection, not manual `worker_cls="nt_ops.worker.NTVLLMWorker"` injection.
+For Cambricon MLU, `nt_ops` now registers an nt-ops-aware MLU general plugin and worker path. The phase-1 backend story is intentionally thin: `vllm-mlu` still owns the only MLU platform plugin and the underlying platform/runtime bring-up, while `nt_ops_vllm` owns worker-time nt-ops attachment, capability reporting, and a small operator matrix. The primary integration path is normal vLLM MLU selection, not manual `worker_cls="nt_ops.worker.NTVLLMWorker"` injection.
 
 ## Quick Start
 
@@ -70,10 +70,10 @@ pip install -e .
 Finally, run the example to verify the installation:
 
 ```bash
-VLLM_PLUGINS=nt_ops_mlu,nt_ops_mlu_hijack VLLM_WORKER_MULTIPROC_METHOD=spawn VLLM_ATTENTION_BACKEND=TRITON_ATTN python examples/basic.py --model /path/to/model
+VLLM_PLUGINS=mlu,nt_ops_mlu VLLM_WORKER_MULTIPROC_METHOD=spawn VLLM_ATTENTION_BACKEND=TRITON_ATTN python examples/basic.py --model /path/to/model
 ```
 
-The example no longer passes a custom `worker_cls`. When selecting the nt-ops MLU platform plugin explicitly, include both `nt_ops_mlu` and `nt_ops_mlu_hijack` in `VLLM_PLUGINS`: the first activates the nt-ops-aware MLU worker path, and the second preserves the upstream `vllm-mlu` hijack behavior required for MLU startup. Phase 1 currently treats `VLLM_WORKER_MULTIPROC_METHOD=spawn` as part of the supported MLU runtime contract.
+The example no longer passes a custom `worker_cls`. When selecting plugins explicitly, include the upstream `mlu` platform plugin and the `nt_ops_mlu` general plugin in `VLLM_PLUGINS`. `vllm-mlu` must remain the sole platform plugin owner for MLU; `nt_ops_mlu` layers its worker rewrite and hijack setup on top. Phase 1 currently treats `VLLM_WORKER_MULTIPROC_METHOD=spawn` as part of the supported MLU runtime contract.
 
 Phase 1 does not claim standalone-backend packaging. `vllm-mlu` remains a required part of the runtime stack in this phase.
 
